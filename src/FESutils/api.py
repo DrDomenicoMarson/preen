@@ -130,17 +130,33 @@ def calculate_fes(config: FESConfig):
         
     block_state = initialize_block_state(config, samples.len_tot, fes.shape)
     block_av = block_state.enabled
-    stride = block_state.stride
+    if block_av and config.stride > 0:
+        raise ValueError(
+            f"{ERROR_PREFIX} --blocks and --stride are mutually exclusive; choose one"
+        )
+    stride_mode = (not block_av) and (config.stride > 0)
+    stride = block_state.stride if block_av else (
+        config.stride if stride_mode and config.stride <= samples.len_tot else samples.len_tot
+    )
     blocks_num = block_state.blocks_num
     block_logweight = block_state.logweight
     block_fes = block_state.fes_storage
-    stride_dir = None
-    
-    if stride != samples.len_tot:
-        chunks = int(samples.len_tot / stride)
-        print(f" printing {chunks} FES files, one every {stride} samples")
-        stride_dir = os.path.join(output_dir, "stride") if output_dir else "stride"
-        os.makedirs(stride_dir, exist_ok=True)
+    chunk_dir = None
+    chunk_kind = None  # "block" or "stride"
+    if block_av:
+        chunk_kind = "block"
+        dir_name = f"blocks_{blocks_num}block"
+    elif stride_mode and stride < samples.len_tot:
+        chunk_kind = "stride"
+        dir_name = f"strided_{stride}"
+    else:
+        dir_name = None
+    if dir_name is not None:
+        chunk_dir = os.path.join(output_dir, dir_name) if output_dir else dir_name
+        os.makedirs(chunk_dir, exist_ok=True)
+        chunks = max(1, int(samples.len_tot / stride))
+        prefix = "blocks" if chunk_kind == "block" else "cumulative stride"
+        print(f" printing {chunks} FES files ({prefix}) to {chunk_dir}")
         
     output_options = OutputOptions(
         fmt=fmt,
@@ -164,12 +180,15 @@ def calculate_fes(config: FESConfig):
     )
 
     def _chunk_path(idx: int) -> str:
-        if stride_dir is None:
+        if chunk_dir is None:
             raise RuntimeError(
-                "stride directory requested without stride configuration"
+                "chunk directory requested without chunk configuration"
             )
-        filename = f"{root_name}_{idx}{ext}"
-        return os.path.join(stride_dir, filename)
+        if chunk_kind == "block":
+            filename = f"{root_name}_block{idx}{ext}"
+        else:
+            filename = f"{root_name}_stride{idx}{ext}"
+        return os.path.join(chunk_dir, filename)
 
     s = len_tot % stride
     if s > 1:
@@ -188,40 +207,48 @@ def calculate_fes(config: FESConfig):
             bias_norm_shift = np.logaddexp.reduce(bias[s:n])
             fes += kbt * bias_norm_shift
         if config.plot:
-            label = f"{chunk_start}-{chunk_end-1}"
-            if stride == len_tot:
+            if chunk_kind is None:
                 plot_manager.record_standard_surface(fes * output_conv)
             else:
+                if chunk_kind == "block":
+                    label = f"block{it} ({chunk_start}-{chunk_end-1})"
+                else:
+                    label = f"{chunk_start}-{chunk_end-1} (cumulative)"
                 plot_manager.add_stride_surface(fes * output_conv, label)
         if block_av:
             block_logweight[it - 1] = bias_norm_shift
             block_fes[it - 1] = fes
             s = n
-        target_file = outfile if stride == len_tot else _chunk_path(it)
+        target_file = outfile if chunk_kind is None else _chunk_path(it)
         stats = SampleStats(size=size, effective_size=effsize)
         write_standard_output(
             target_file, grid_state, names, output_options, stats, mesh_tuple
         )
-        if stride != len_tot:
+        if chunk_kind is not None:
             it += 1
             
     if config.plot:
-        if stride == len_tot:
+        if chunk_kind is None:
             standard_plot_path = (
                 os.path.join(output_dir, f"{root_name}.png")
                 if output_dir
                 else f"{root_name}.png"
             )
             plot_manager.save_standard_plot(standard_plot_path, names)
-        elif stride_dir is not None:
-            stride_plot_path = os.path.join(stride_dir, f"{root_name}_stride.png")
+        elif chunk_kind == "stride" and chunk_dir is not None:
+            stride_plot_path = os.path.join(chunk_dir, f"{root_name}_strided.png")
             plot_manager.save_stride_plots(stride_plot_path, names)
+        elif chunk_kind == "block" and chunk_dir is not None:
+            block_plot_path = os.path.join(chunk_dir, f"{root_name}_blocks.png")
+            plot_manager.save_stride_plots(block_plot_path, names)
             
     if block_av:
-        block_dir = os.path.join(output_dir, "block") if output_dir else "block"
+        block_dir = chunk_dir if chunk_dir is not None else (
+            os.path.join(output_dir, f"blocks_{blocks_num}block") if output_dir else f"blocks_{blocks_num}block"
+        )
         os.makedirs(block_dir, exist_ok=True)
-        block_outfile = os.path.join(block_dir, base_name)
-        block_err_plot = os.path.join(block_dir, f"{root_name}_block_error.png")
+        block_outfile = os.path.join(block_dir, f"{root_name}_block-avg{ext}")
+        block_err_plot = os.path.join(block_dir, f"{root_name}_block-error.png")
         print("  NOTE: try different numbers of blocks and"
               " check for the convergence of the uncertainty estimate")
         print(f" printing final FES with block average to {block_outfile}")

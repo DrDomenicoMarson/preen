@@ -94,10 +94,11 @@ def test_2_dZ_16block(regression_env):
         plot=True
     )
     run_fes(config)
-    # When blocks are used, the final output is in a 'block' subdirectory
-    block_outfile = os.path.join(os.path.dirname(outfile), 'block', os.path.basename(outfile))
-    # Reference file is also in a block subdirectory
-    ref_outfile = os.path.join(regression_env['reference_dir'], 'block', 'dZ_16block.dat')
+    # When blocks are used, the final averaged output is in a 'blocks_<N>block' subdirectory
+    block_dir = os.path.join(os.path.dirname(outfile), 'blocks_16block')
+    block_outfile = os.path.join(block_dir, 'dZ_16block_block-avg.dat')
+    # Reference file is also in a blocks_<N>block subdirectory
+    ref_outfile = os.path.join(regression_env['reference_dir'], 'blocks_16block', 'dZ_16block_block-avg.dat')
     compare_files(block_outfile, ref_outfile)
 
 def test_3_dZ_stride(regression_env):
@@ -116,7 +117,7 @@ def test_3_dZ_stride(regression_env):
     )
     run_fes(config)
     
-    stride_dir = os.path.join(os.path.dirname(outfile), 'stride')
+    stride_dir = os.path.join(os.path.dirname(outfile), 'strided_500000')
     assert os.path.exists(stride_dir)
     # Check if files are there
     files = glob.glob(os.path.join(stride_dir, '*.dat'))
