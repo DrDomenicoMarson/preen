@@ -18,7 +18,7 @@ def regression_env():
     base_dir = os.path.dirname(os.path.abspath(__file__))
     # example_data is now in ../examples/data relative to tests/
     example_data_dir = os.path.abspath(os.path.join(base_dir, '..', 'examples', 'data'))
-    reference_dir = os.path.join(example_data_dir, 'res_fromKERNELS_reference')
+    reference_dir = os.path.join(example_data_dir, 'reference_fromCOLVAR')
     colvar_file = os.path.join(example_data_dir, 'COLVAR_merged.tgz')
     test_output_dir = os.path.join(base_dir, 'test_regression_output')
     
@@ -94,11 +94,10 @@ def test_2_dZ_16block(regression_env):
         plot=True
     )
     run_fes(config)
-    # When blocks are used, the final averaged output is in a 'blocks_<N>block' subdirectory
-    block_dir = os.path.join(os.path.dirname(outfile), 'blocks_16block')
-    block_outfile = os.path.join(block_dir, 'dZ_16block_block-avg.dat')
-    # Reference file is also in a blocks_<N>block subdirectory
-    ref_outfile = os.path.join(regression_env['reference_dir'], 'blocks_16block', 'dZ_16block_block-avg.dat')
+    # Final averaged output lives in the parent directory
+    block_outfile = os.path.join(os.path.dirname(outfile), 'dZ_16block_block-avg.dat')
+    # Reference file is in the reference parent directory
+    ref_outfile = os.path.join(regression_env['reference_dir'], 'dZ_16block_block-avg.dat')
     compare_files(block_outfile, ref_outfile)
 
 def test_3_dZ_stride(regression_env):
@@ -117,7 +116,7 @@ def test_3_dZ_stride(regression_env):
     )
     run_fes(config)
     
-    stride_dir = os.path.join(os.path.dirname(outfile), 'strided_500000')
+    stride_dir = os.path.join(os.path.dirname(outfile), 'dZ_500000stride_strided-500000')
     assert os.path.exists(stride_dir)
     # Check if files are there
     files = glob.glob(os.path.join(stride_dir, '*.dat'))

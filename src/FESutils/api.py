@@ -31,6 +31,14 @@ def calculate_fes(config: FESConfig):
         raise ValueError(f"{ERROR_PREFIX} only 1 or 2 dimensional bias are supported")
         
     print("")
+
+    def _display_path(path: str) -> str:
+        """Return path relative to current working directory when possible."""
+        try:
+            return os.path.relpath(path)
+        except ValueError:
+            return path
+
     colvar_data = load_colvar_data(config)
     samples = create_sample_state(colvar_data)
     len_tot = samples.len_tot
@@ -145,10 +153,10 @@ def calculate_fes(config: FESConfig):
     chunk_kind = None  # "block" or "stride"
     if block_av:
         chunk_kind = "block"
-        dir_name = f"blocks_{blocks_num}block"
+        dir_name = f"{root_name}_blocks-{blocks_num}"
     elif stride_mode and stride < samples.len_tot:
         chunk_kind = "stride"
-        dir_name = f"strided_{stride}"
+        dir_name = f"{root_name}_strided-{stride}"
     else:
         dir_name = None
     if dir_name is not None:
@@ -156,7 +164,7 @@ def calculate_fes(config: FESConfig):
         os.makedirs(chunk_dir, exist_ok=True)
         chunks = max(1, int(samples.len_tot / stride))
         prefix = "blocks" if chunk_kind == "block" else "cumulative stride"
-        print(f" printing {chunks} FES files ({prefix}) to {chunk_dir}")
+        print(f" printing {chunks} FES files ({prefix}) to {_display_path(chunk_dir)}")
         
     output_options = OutputOptions(
         fmt=fmt,
@@ -179,6 +187,7 @@ def calculate_fes(config: FESConfig):
         config.plot, dim2, grid_state.axis_x, grid_state.axis_y, mintozero, mesh_tuple
     )
 
+
     def _chunk_path(idx: int) -> str:
         if chunk_dir is None:
             raise RuntimeError(
@@ -194,11 +203,13 @@ def calculate_fes(config: FESConfig):
     if s > 1:
         print(f" first {s} samples discarded to fit with given stride")
     it = 1
+    last_stats: SampleStats | None = None
     for n in range(s + stride, len_tot + 1, stride):
         chunk_start = s
         chunk_end = n
         if stride != len_tot:
-            print(f"     working...     0% of {n/(len_tot+1):.0%}", end="\r")
+            progress = n / len_tot if len_tot else 1.0
+            print(f"     working... {n}/{len_tot} samples ({progress:.0%})", end="\r")
         kernel_evaluator.fill_chunk(samples, s, n, grid_state, kernel_params)
         weights = np.exp(bias[s:n] - np.amax(bias[s:n]))
         size = len(weights)
@@ -221,6 +232,7 @@ def calculate_fes(config: FESConfig):
             s = n
         target_file = outfile if chunk_kind is None else _chunk_path(it)
         stats = SampleStats(size=size, effective_size=effsize)
+        last_stats = stats
         write_standard_output(
             target_file, grid_state, names, output_options, stats, mesh_tuple
         )
@@ -235,23 +247,45 @@ def calculate_fes(config: FESConfig):
                 else f"{root_name}.png"
             )
             plot_manager.save_standard_plot(standard_plot_path, names)
-        elif chunk_kind == "stride" and chunk_dir is not None:
-            stride_plot_path = os.path.join(chunk_dir, f"{root_name}_strided.png")
+        elif chunk_kind == "stride":
+            stride_plot_path = (
+                os.path.join(output_dir, f"{root_name}_strided.png")
+                if output_dir
+                else f"{root_name}_strided.png"
+            )
             plot_manager.save_stride_plots(stride_plot_path, names)
-        elif chunk_kind == "block" and chunk_dir is not None:
-            block_plot_path = os.path.join(chunk_dir, f"{root_name}_blocks.png")
+        elif chunk_kind == "block":
+            block_plot_path = (
+                os.path.join(output_dir, f"{root_name}_blocks.png")
+                if output_dir
+                else f"{root_name}_blocks.png"
+            )
             plot_manager.save_stride_plots(block_plot_path, names)
+
+    # Write final aggregated output in the parent directory for stride mode
+    if chunk_kind == "stride" and last_stats is not None:
+        write_standard_output(
+            outfile, grid_state, names, output_options, last_stats, mesh_tuple
+        )
             
     if block_av:
         block_dir = chunk_dir if chunk_dir is not None else (
-            os.path.join(output_dir, f"blocks_{blocks_num}block") if output_dir else f"blocks_{blocks_num}block"
+            os.path.join(output_dir, f"{root_name}_blocks-{blocks_num}")
+            if output_dir
+            else f"{root_name}_blocks-{blocks_num}"
         )
         os.makedirs(block_dir, exist_ok=True)
-        block_outfile = os.path.join(block_dir, f"{root_name}_block-avg{ext}")
-        block_err_plot = os.path.join(block_dir, f"{root_name}_block-error.png")
-        print("  NOTE: try different numbers of blocks and"
-              " check for the convergence of the uncertainty estimate")
-        print(f" printing final FES with block average to {block_outfile}")
+        block_outfile = (
+            os.path.join(output_dir, f"{root_name}_block-avg{ext}")
+            if output_dir
+            else f"{root_name}_block-avg{ext}"
+        )
+        block_err_plot = (
+            os.path.join(output_dir, f"{root_name}_block-error.png")
+            if output_dir
+            else f"{root_name}_block-error.png"
+        )
+        print(f" printing final FES with block average to {_display_path(block_outfile)}")
         start = len_tot % stride
         size = len_tot - start
         weights = np.exp(bias[start:] - np.amax(bias[start:]))
@@ -384,7 +418,8 @@ def calculate_fes_from_state(config: FESConfig):
 
     # 3. Process each state
     for n in range(len(fields_pos) - 1):
-        print(f"   working...   0% of {n/(len(fields_pos)-1):.0%}", end="\r")
+        total_states = len(fields_pos) - 1
+        print(f"   working... state {n+1}/{total_states}", end="\r")
         l = fields_pos[n]
         
         # Parse Header

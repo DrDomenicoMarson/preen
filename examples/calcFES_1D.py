@@ -16,33 +16,19 @@ def main():
 
     PartConfig = partial(FESConfig,
                          filename=os.path.join(example_data_dir, 'COLVAR_merged.tgz'),
-                         temp=300.0, plot=True, backup=True, bias_spec='opes.bias',
+                         temp=300.0, plot=True, backup=False, bias_spec='opes.bias',
+                         sigma=(0.05, ),
+                         cv_spec=('dT.z', ),
+                         grid_bin=(100, ),
                          )
 
-    calculate_fes(PartConfig(
-        outfile=os.path.join(output_dir, 'fes2d-rew.dat'),
-        sigma=(0.05, 5.0),
-        cv_spec=('dT.z', 'tiltAvg'),
-        grid_bin=(50, 50),
-    ))
+    calculate_fes(PartConfig(outfile=os.path.join(output_dir, 'fesZ-rew.dat'),))
 
-    print("Running FES calculation (Reweighting)...")
-    calculate_fes(PartConfig(
-        outfile=os.path.join(output_dir, 'fes2d-rew-strided.dat'),
-        sigma=(0.05, 5.0),
-        cv_spec=('dT.z', 'tiltAvg'),
-        grid_bin=(50, 50),
-        stride=100000,
-    ))
+    calculate_fes(PartConfig(outfile=os.path.join(output_dir, 'fesZ-rew.dat'),
+                             stride=500000))
 
-    print("Running FES calculation (Reweighting)...")
-    calculate_fes(PartConfig(
-        outfile=os.path.join(output_dir, 'fes2d-rew-blocks.dat'),
-        sigma=(0.05, 5.0),
-        cv_spec=('dT.z', 'tiltAvg'),
-        grid_bin=(50, 50),
-        blocks_num=8,
-    ))
+    calculate_fes(PartConfig(outfile=os.path.join(output_dir, 'fesZ-rew.dat'),
+                             blocks_num=8))
 
 if __name__ == "__main__":
     main()
