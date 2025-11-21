@@ -7,7 +7,7 @@ from __future__ import annotations
 from dataclasses import dataclass
 from pathlib import Path
 import re
-from typing import Iterable, Sequence
+from typing import Sequence
 
 import numpy as np
 import pandas as pd
@@ -51,29 +51,6 @@ def discover_colvar_files(base_dir: str | Path, basename: str = "COLVAR") -> lis
     candidates = [p for p in base.rglob("*") if p.is_file() and pattern.match(p.name)]
     candidates.sort(key=_natural_key)
     return candidates
-
-
-def _stitch_time(values: pd.Series) -> pd.Series:
-    """
-    Ensure time monotonicity by adding offsets when time resets.
-    """
-    if values.empty:
-        return values
-    stitched = []
-    offset = 0.0
-    prev = values.iloc[0]
-    prev_prev = prev
-    stitched.append(prev)
-    for idx in range(1, len(values)):
-        current = values.iloc[idx]
-        if current < prev:
-            delta = prev - prev_prev if idx >= 2 else 0.0
-            offset += prev + delta - current
-        stitched_val = current + offset
-        stitched.append(stitched_val)
-        prev_prev = prev
-        prev = stitched_val
-    return pd.Series(stitched, index=values.index, dtype=float)
 
 
 @dataclass
@@ -144,11 +121,11 @@ def read_colvar_dataframe(
 def merge_colvar_files(
     base_dir: str | Path,
     basename: str = "COLVAR",
-    discard_fraction: float = 0.0,
+    discard_fraction: float = 0.1,
     keep_order: bool = True,
     time_ordered: bool = False,
-    stitch_time: bool = True,
     output_path: str | Path | None = None,
+    verbose: bool = True,
 ) -> MergeResult:
     """
     Merge COLVAR files located under base_dir.
@@ -156,19 +133,26 @@ def merge_colvar_files(
     - discard_fraction: drop that fraction of valid rows from the start of each file.
     - keep_order: append files in natural order (directories and suffix numbers).
     - time_ordered: sort merged data by the time column (if present).
-    - stitch_time: when sorting, fix decreasing time segments by adding offsets.
     - output_path: if provided, write merged data with the first header.
+    - verbose: print progress information while loading files.
     """
+    if not (0.0 <= discard_fraction <= 1.0):
+        raise ValueError("discard_fraction must be between 0.0 and 1.0")
+
     files = discover_colvar_files(base_dir, basename=basename)
     if not files:
         raise FileNotFoundError(f"No COLVAR files matching '{basename}' found in {base_dir}")
+    total_files = len(files)
+    if verbose:
+        print(f"Found {total_files} COLVAR file(s) matching '{basename}'")
+        print(f"Loading COLVAR files: 0/{total_files}", end="\r", flush=True)
 
     merged_frames: list[pd.DataFrame] = []
     header_lines: list[str] | None = None
     fields: Sequence[str] | None = None
     valid_sources: list[Path] = []
 
-    for path in files:
+    for idx, path in enumerate(files, start=1):
         result = read_colvar_dataframe(path, expected_fields=fields, discard_fraction=discard_fraction)
         if result is None:
             continue
@@ -179,6 +163,11 @@ def merge_colvar_files(
             header_lines = hdr
         merged_frames.append(df)
         valid_sources.append(path)
+        if verbose:
+            print(f"Loading COLVAR files: {idx}/{total_files}", end="\r", flush=True)
+
+    if verbose:
+        print(f"Loading COLVAR files: {len(valid_sources)}/{total_files} (done)          ")
 
     if not merged_frames or fields is None or header_lines is None:
         raise RuntimeError("No valid COLVAR data found to merge.")
@@ -190,8 +179,6 @@ def merge_colvar_files(
         time_col = merged_df.columns[0]
 
     if time_ordered and time_col is not None:
-        if stitch_time:
-            merged_df[time_col] = _stitch_time(merged_df[time_col])
         merged_df = merged_df.sort_values(time_col, kind="mergesort", ignore_index=True)
 
     if keep_order and not time_ordered:
@@ -199,6 +186,8 @@ def merge_colvar_files(
 
     if output_path:
         _write_colvar(Path(output_path), header_lines, merged_df)
+        if verbose:
+            print(f"Wrote merged COLVAR to {output_path}")
 
     return MergeResult(
         dataframe=merged_df,

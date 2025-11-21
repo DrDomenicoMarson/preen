@@ -28,12 +28,15 @@ def _resolve_columns(fields: Sequence[str], columns: Sequence[str] | None) -> li
 def plot_colvar_timeseries(
     base_dir: str | Path,
     basename: str = "COLVAR",
-    discard_fraction: float = 0.0,
+    discard_fraction: float = 0.1,
     columns: Sequence[str] | None = None,
     time_column: str | None = "time",
     output_path: str | Path | None = "colvar_timeseries.png",
     per_run: bool = False,
     include_hist: bool = True,
+    marker: str = ",",
+    marker_size: float = 0.4,
+    verbose: bool = True,
 ) -> dict[str, Path]:
     """
     Plot time series from COLVAR files discovered in base_dir.
@@ -41,14 +44,21 @@ def plot_colvar_timeseries(
     - output_path: aggregated plot of all files (if provided).
     - per_run: also write one plot per COLVAR file next to the source file.
     - include_hist: also plot histograms for the selected columns.
+    - verbose: print progress information while loading/plotting.
     Returns mapping of label -> output path.
     """
+    if not (0.0 <= discard_fraction <= 1.0):
+        raise ValueError("discard_fraction must be between 0.0 and 1.0")
+
     files = discover_colvar_files(base_dir, basename=basename)
     aggregates = []
     headers: Sequence[str] | None = None
     outputs: dict[str, Path] = {}
+    if verbose:
+        print(f"Found {len(files)} COLVAR file(s) matching '{basename}'")
+        print(f"Loading COLVAR files: 0/{len(files)}", end="\r", flush=True)
 
-    for path in files:
+    for idx, path in enumerate(files, start=1):
         result = read_colvar_dataframe(path, expected_fields=headers, discard_fraction=discard_fraction)
         if result is None:
             continue
@@ -58,6 +68,8 @@ def plot_colvar_timeseries(
         time_col = time_column if time_column and time_column in fields else fields[0]
         cols_to_plot = _resolve_columns(fields, columns)
         aggregates.append((path, time_col, cols_to_plot, df))
+        if verbose:
+            print(f"Loading COLVAR files: {idx}/{len(files)}", end="\r", flush=True)
         if per_run:
             out = path.with_suffix("")  # drop .gz if present
             out_path = Path(f"{out}_timeseries.png")
@@ -68,6 +80,8 @@ def plot_colvar_timeseries(
                 [df],
                 out_path,
                 discard_fraction=discard_fraction,
+                marker=marker,
+                marker_size=marker_size,
             )
             outputs[path.name] = out_path
             if include_hist:
@@ -78,8 +92,12 @@ def plot_colvar_timeseries(
                     [df],
                     hist_path,
                     discard_fraction=discard_fraction,
+                    marker_size=marker_size,
                 )
                 outputs[f"{path.name}_hist"] = hist_path
+
+    if verbose:
+        print(f"Loading COLVAR files: {len(aggregates)}/{len(files)} (done)          ")
 
     if not aggregates:
         raise FileNotFoundError(f"No valid COLVAR files found under {base_dir}")
@@ -97,6 +115,8 @@ def plot_colvar_timeseries(
             dfs,
             out_path,
             discard_fraction=discard_fraction,
+            marker=marker,
+            marker_size=marker_size,
         )
         outputs["aggregate"] = out_path
         if include_hist:
@@ -107,58 +127,67 @@ def plot_colvar_timeseries(
                 dfs,
                 hist_out,
                 discard_fraction=discard_fraction,
+                marker_size=marker_size,
             )
             outputs["aggregate_hist"] = hist_out
+        if verbose:
+            print(f"Wrote aggregate plot(s) to {out_path}")
 
     return outputs
 
 
-def _plot_single(labels, time_col: str, cols: Sequence[str], dfs: list, out_path: Path, discard_fraction: float) -> None:
+def _plot_single(labels, time_col: str, cols: Sequence[str], dfs: list, out_path: Path, discard_fraction: float, marker: str, marker_size: float) -> None:
     n_plots = len(cols)
     cols_per_row = 3 if n_plots > 2 else n_plots
     rows = math.ceil(n_plots / cols_per_row)
-    fig, axes = plt.subplots(rows, cols_per_row, figsize=(4 * cols_per_row, 2.5 * rows), squeeze=False)
+    width_factor = 5.0 if cols_per_row > 1 else 4.5
+    fig, axes = plt.subplots(rows, cols_per_row, figsize=(width_factor * cols_per_row, 2.5 * rows), squeeze=False)
     flat_axes = axes.flat
+    label_list = []
     for idx, col in enumerate(cols):
         ax = flat_axes[idx]
         for df, label in zip(dfs, labels if isinstance(labels, list) else [labels] * len(dfs)):
-            ax.plot(df[time_col], df[col], label=label, linewidth=0.8)
+            ax.scatter(df[time_col], df[col], label=label, s=marker_size, marker=marker, alpha=0.8)
+            label_list.append(label)
         ax.set_xlabel(time_col)
         ax.set_ylabel(col)
-        if len(dfs) > 1:
-            ax.legend(fontsize=7)
-    title = "COLVAR time series"
-    if discard_fraction > 0:
-        title += f" (discard {discard_fraction*100:.1f}% per file)"
+    unique_labels = list(dict.fromkeys(label_list))
+    legend = None
+    legend_space = False
+    title = f"COLVAR time series (discard {discard_fraction*100:.1f}% per file)"
     fig.suptitle(title, fontsize=10)
     # Hide unused axes
     for ax in flat_axes[n_plots:]:
         ax.set_visible(False)
-    fig.tight_layout(rect=[0, 0, 1, 0.96])
-    fig.savefig(out_path, dpi=300)
+    rect_right = 1
+    fig.tight_layout(rect=[0, 0, rect_right, 0.96])
+    fig.savefig(out_path, dpi=600)
     plt.close(fig)
 
 
-def _plot_histograms(labels, cols: Sequence[str], dfs: list, out_path: Path, discard_fraction: float) -> None:
+def _plot_histograms(labels, cols: Sequence[str], dfs: list, out_path: Path, discard_fraction: float, marker: str | None = None, marker_size: float | None = None) -> None:
     n_plots = len(cols)
     cols_per_row = 3 if n_plots > 2 else n_plots
     rows = math.ceil(n_plots / cols_per_row)
-    fig, axes = plt.subplots(rows, cols_per_row, figsize=(4 * cols_per_row, 2.5 * rows), squeeze=False)
+    width_factor = 5.0 if cols_per_row > 1 else 4.5
+    fig, axes = plt.subplots(rows, cols_per_row, figsize=(width_factor * cols_per_row, 2.5 * rows), squeeze=False)
     flat_axes = axes.flat
+    label_list = []
     for idx, col in enumerate(cols):
         ax = flat_axes[idx]
         for df, label in zip(dfs, labels if isinstance(labels, list) else [labels] * len(dfs)):
             ax.hist(df[col], bins=30, alpha=0.6, label=label)
+            label_list.append(label)
         ax.set_xlabel(col)
         ax.set_ylabel("count")
-        if len(dfs) > 1:
-            ax.legend(fontsize=7)
-    title = "COLVAR histograms"
-    if discard_fraction > 0:
-        title += f" (discard {discard_fraction*100:.1f}% per file)"
+    unique_labels = list(dict.fromkeys(label_list))
+    legend = None
+    legend_space = False
+    title = f"COLVAR histograms (discard {discard_fraction*100:.1f}% per file)"
     fig.suptitle(title, fontsize=10)
     for ax in flat_axes[n_plots:]:
         ax.set_visible(False)
-    fig.tight_layout(rect=[0, 0, 1, 0.96])
-    fig.savefig(out_path, dpi=300)
+    rect_right = 1
+    fig.tight_layout(rect=[0, 0, rect_right, 0.96])
+    fig.savefig(out_path, dpi=600)
     plt.close(fig)

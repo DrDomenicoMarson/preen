@@ -63,7 +63,7 @@ def test_merge_drops_malformed_and_discards(tmp_path):
     assert result.source_files[1].name == "COLVAR.1"
 
 
-def test_merge_time_order_and_stitch(tmp_path):
+def test_merge_time_order_no_stitch(tmp_path):
     d0 = tmp_path / "0"
     d1 = tmp_path / "1"
     d0.mkdir()
@@ -86,12 +86,25 @@ def test_merge_time_order_and_stitch(tmp_path):
     result = merge_colvar_files(
         base_dir=tmp_path,
         time_ordered=True,
-        stitch_time=True,
     )
     times = result.dataframe["time"].to_numpy()
-    assert np.all(np.diff(times) >= 0), "time should be monotonic after stitching"
-    # Should contain all rows
-    assert len(result.dataframe) == 5
+    # Sorting should not modify values; just stable sort by time
+    assert np.all(times == np.array([0, 0, 1, 1, 2]))
+    assert np.all(np.diff(times) >= 0)
+
+
+def test_invalid_discard_fraction(tmp_path):
+    d = tmp_path / "run"
+    d.mkdir()
+    _write_colvar(
+        d / "COLVAR",
+        [
+            "0 0.0 0.0",
+            "1 0.1 0.2",
+        ],
+    )
+    with pytest.raises(ValueError):
+        merge_colvar_files(base_dir=d, discard_fraction=1.5)
 
 
 def test_merge_skips_mismatched_headers(tmp_path):

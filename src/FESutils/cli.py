@@ -33,19 +33,13 @@ def _add_colvar_merge(subparsers):
     parser.add_argument(
         "--discard-fraction",
         type=float,
-        default=0.0,
-        help="Fraction of each file to discard from the start (0.0-1.0).",
+        default=0.1,
+        help="Fraction of each file to discard from the start (0.0-1.0). Default: 0.1.",
     )
     parser.add_argument(
         "--time-ordered",
         action="store_true",
-        help="Sort merged data by time (stitches decreasing segments).",
-    )
-    parser.add_argument(
-        "--no-stitch-time",
-        dest="stitch_time",
-        action="store_false",
-        help="Disable time stitching when ordering by time.",
+        help="Sort merged data by time.",
     )
     parser.add_argument(
         "--no-keep-order",
@@ -58,7 +52,12 @@ def _add_colvar_merge(subparsers):
         type=str,
         help="Write merged COLVAR to this path. If omitted, data stays in memory.",
     )
-    parser.set_defaults(func=_handle_colvar_merge, stitch_time=True, keep_order=True)
+    parser.add_argument(
+        "--quiet",
+        action="store_true",
+        help="Suppress progress output.",
+    )
+    parser.set_defaults(func=_handle_colvar_merge, keep_order=True)
 
 
 def _add_colvar_plot(subparsers):
@@ -81,6 +80,17 @@ def _add_colvar_plot(subparsers):
         help="Specific columns to plot (default: all except time).",
     )
     parser.add_argument(
+        "--marker",
+        default=",",
+        help="Matplotlib marker for time-series scatter (default: ',').",
+    )
+    parser.add_argument(
+        "--marker-size",
+        type=float,
+        default=0.4,
+        help="Marker size for time-series scatter (default: 0.4).",
+    )
+    parser.add_argument(
         "--time-column",
         default="time",
         help="Column to use for the x-axis (default: time; falls back to first column if missing).",
@@ -101,6 +111,11 @@ def _add_colvar_plot(subparsers):
         action="store_false",
         help="Do not generate histogram plots.",
     )
+    parser.add_argument(
+        "--quiet",
+        action="store_true",
+        help="Suppress progress output.",
+    )
     parser.set_defaults(func=_handle_colvar_plot, include_hist=True)
 
 
@@ -115,9 +130,16 @@ def _handle_colvar_plot(args):
         output_path=output_path,
         per_run=args.per_run,
         include_hist=args.include_hist,
+        marker=args.marker,
+        marker_size=args.marker_size,
+        verbose=not args.quiet,
     )
     for label, path in outputs.items():
-        print(f"{label}: {Path(path).resolve()}")
+        try:
+            display_path = Path(path).resolve().relative_to(Path.cwd())
+        except ValueError:
+            display_path = Path(path).resolve()
+        print(f"{label}: {display_path}")
     return 0
 
 
@@ -128,8 +150,8 @@ def _handle_colvar_merge(args):
         discard_fraction=args.discard_fraction,
         keep_order=args.keep_order,
         time_ordered=args.time_ordered,
-        stitch_time=args.stitch_time,
         output_path=args.output,
+        verbose=not args.quiet,
     )
     print(f"Merged {len(result.source_files)} file(s); total rows: {len(result.dataframe)}")
     if args.output:

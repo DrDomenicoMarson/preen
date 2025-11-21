@@ -42,6 +42,7 @@ def test_plot_timeseries_creates_files(tmp_path):
         output_path=out,
         per_run=True,
         include_hist=True,
+        marker="o",
     )
     assert "aggregate" in outputs
     assert outputs["aggregate"].exists()
