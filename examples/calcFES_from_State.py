@@ -12,12 +12,13 @@ def main():
     # Define configuration
     base_dir = os.path.dirname(os.path.abspath(__file__))
     example_data_dir = os.path.join(base_dir, 'data')
+    output_dir = os.path.join(base_dir, 'output')
 
     state_file = os.path.join(example_data_dir, 'KERNELSforRST')
 
     config = FESConfig(
         filename=state_file,
-        outfile='fes-state.dat',
+        outfile=os.path.join(output_dir, 'fes-state.dat'),
         temp=300.0,
         grid_bin=(100, 100),
         plot=True,
@@ -25,11 +26,8 @@ def main():
     )
 
     print("Running FES calculation (From State)...")
-    try:
-        calculate_fes_from_state(config)
-        print("Success!")
-    except Exception as e:
-        print(f"Error: {e}")
+    calculate_fes_from_state(config)
+    print("Success!")
 
 if __name__ == "__main__":
     main()
