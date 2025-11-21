@@ -16,7 +16,8 @@ import matplotlib.pyplot as plt
 def regression_env():
     """Set up and tear down the regression test environment."""
     base_dir = os.path.dirname(os.path.abspath(__file__))
-    example_data_dir = os.path.join(base_dir, 'example_data')
+    # example_data is now in ../examples/data relative to tests/
+    example_data_dir = os.path.abspath(os.path.join(base_dir, '..', 'examples', 'data'))
     reference_dir = os.path.join(example_data_dir, 'res_fromKERNELS_reference')
     colvar_file = os.path.join(example_data_dir, 'COLVAR_merged.tgz')
     test_output_dir = os.path.join(base_dir, 'test_regression_output')

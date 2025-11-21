@@ -11,7 +11,7 @@ from FESutils.api import calculate_fes_from_state
 def main():
     # Define configuration
     base_dir = os.path.dirname(os.path.abspath(__file__))
-    example_data_dir = os.path.join(base_dir, 'example_data')
+    example_data_dir = os.path.join(base_dir, 'data')
     
     # Note: KERNELSforRST might not be compressed in example_data by default, 
     # but our API supports both.

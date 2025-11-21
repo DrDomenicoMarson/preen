@@ -17,7 +17,8 @@ def state_env():
         shutil.rmtree(test_dir)
     os.makedirs(test_dir)
     
-    kernels_file = os.path.join(base_dir, 'example_data', 'KERNELSforRST')
+    # example_data is in ../examples/data
+    kernels_file = os.path.abspath(os.path.join(base_dir, '..', 'examples', 'data', 'KERNELSforRST'))
     outfile = os.path.join(test_dir, 'fes_from_state.dat')
     
     env = {

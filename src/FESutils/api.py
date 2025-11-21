@@ -20,6 +20,9 @@ def calculate_fes(config: FESConfig):
     """
     Calculate FES from COLVAR data (reweighting).
     """
+    if config.dimension > 2:
+        raise ValueError(f"{ERROR_PREFIX} only 1 or 2 dimensional bias are supported")
+        
     print("")
     colvar_data = load_colvar_data(config)
     samples = create_sample_state(colvar_data)

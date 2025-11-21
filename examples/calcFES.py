@@ -12,7 +12,7 @@ def main():
     # Define configuration
     # In a real scenario, these might come from arguments or a config file
     base_dir = os.path.dirname(os.path.abspath(__file__))
-    example_data_dir = os.path.join(base_dir, 'example_data')
+    example_data_dir = os.path.join(base_dir, 'data')
     
     config = FESConfig(
         filename=os.path.join(example_data_dir, 'COLVAR_merged.tgz'),
