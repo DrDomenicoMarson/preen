@@ -1,0 +1,5 @@
+# Numerical computing core
+numpy
+pandas
+numba
+matplotlib
