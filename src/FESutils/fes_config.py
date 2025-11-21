@@ -1,5 +1,5 @@
 from dataclasses import dataclass
-from FESutils.constants import KB_KJ_MOL
+from FESutils.constants import KB_KJ_MOL, normalize_energy_unit
 
 @dataclass(frozen=True)
 class FESConfig:
@@ -27,6 +27,8 @@ class FESConfig:
     fmt: str = "% 12.6f"
     plot: bool = False
     backup: bool = False
+    input_energy_unit: str = "kJ/mol"
+    output_energy_unit: str = "kJ/mol"
 
     def __post_init__(self):
         if self.kbt is None:
@@ -40,6 +42,13 @@ class FESConfig:
              # Let's just allow kbt to take precedence if both are there, or raise error.
              # Plan said: "Calculate kbt from temp if kbt is missing".
              pass
+        # Normalize energy units
+        object.__setattr__(
+            self, "input_energy_unit", normalize_energy_unit(self.input_energy_unit)
+        )
+        object.__setattr__(
+            self, "output_energy_unit", normalize_energy_unit(self.output_energy_unit)
+        )
 
     @property
     def dimension(self) -> int:

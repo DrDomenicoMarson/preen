@@ -12,7 +12,7 @@ import contextlib
 from typing import IO, Generator
 
 from .fes_config import FESConfig
-from .constants import ERROR_PREFIX
+from .constants import ERROR_PREFIX, energy_conversion_factor
 
 
 @dataclass
@@ -91,7 +91,8 @@ def load_colvar_data(config: FESConfig) -> ColvarData:
     bias = np.zeros(len(cv_arrays[0]))
     for col in metadata.bias.columns:
         bias += np.array(data.iloc[:, col_map[col]], dtype=float)
-    bias = np.ascontiguousarray(bias / config.kbt)
+    energy_factor = energy_conversion_factor(config.input_energy_unit, "kJ/mol")
+    bias = np.ascontiguousarray((bias * energy_factor) / config.kbt)
     return ColvarData(metadata=metadata, cv_values=tuple(cv_arrays), bias=bias)
 
 

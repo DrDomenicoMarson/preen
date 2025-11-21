@@ -17,6 +17,8 @@ class OutputOptions:
     delta_threshold: float | None
     kbt: float
     backup: bool = True
+    energy_unit: str = "kJ/mol"
+    energy_conversion: float = 1.0  # multiply kJ/mol values by this to get target unit
 
 
 @dataclass
@@ -43,9 +45,12 @@ def write_standard_output(
     der_x = grid_state.der_fes_x
     der_y = grid_state.der_fes_y
     shift = np.amin(fes) if options.mintozero else 0
+    conv = options.energy_conversion
+    energy_unit = options.energy_unit
     delta = None
     if options.calc_deltaF and options.delta_threshold is not None:
-        delta = _compute_delta_f(fes, grid_state, options, mesh)
+        delta_base = _compute_delta_f(fes, grid_state, options, mesh)
+        delta = delta_base * conv
         stats.delta_f = delta
     if options.backup:
         backup_file(outfilename)
@@ -63,6 +68,7 @@ def write_standard_output(
         f.write(f"#! SET effective_sample_size {stats.effective_size}\n")
         if options.calc_deltaF and delta is not None:
             f.write(f"#! SET DeltaF {delta}\n")
+        f.write(f"#! SET energy_unit {energy_unit}\n")
         f.write(f"#! SET min_{names[0]} {axis_x.minimum}\n")
         f.write(f"#! SET max_{names[0]} {axis_x.maximum}\n")
         f.write(f"#! SET nbins_{names[0]} {axis_x.bins}\n")
@@ -72,9 +78,12 @@ def write_standard_output(
         fmt = options.fmt
         if not dim2:
             for i in range(axis_x.bins):
-                line = (f"{fmt}  {fmt}") % (axis_x.values[i], fes[i] - shift)
+                line = (f"{fmt}  {fmt}") % (
+                    axis_x.values[i],
+                    (fes[i] - shift) * conv,
+                )
                 if der_x is not None:
-                    line += (f" {fmt}") % (der_x[i])
+                    line += (f" {fmt}") % (der_x[i] * conv)
                 f.write(f"{line}\n")
         else:
             assert axis_y is not None
@@ -98,10 +107,13 @@ def write_standard_output(
                     line = (f"{fmt} {fmt}  {fmt}") % (
                         x_mesh[i, j],
                         y_mesh[i, j],
-                        fes[i, j] - shift,
+                        (fes[i, j] - shift) * conv,
                     )
                     if der_x is not None and der_y is not None:
-                        line += (f" {fmt} {fmt}") % (der_x[i, j], der_y[i, j])
+                        line += (f" {fmt} {fmt}") % (
+                            der_x[i, j] * conv,
+                            der_y[i, j] * conv,
+                        )
                     f.write(f"{line}\n")
                 f.write("\n")
     return delta
@@ -121,9 +133,12 @@ def write_block_output(
     axis_y = grid_state.axis_y
     fes = grid_state.fes
     shift = np.amin(fes) if options.mintozero else 0
+    conv = options.energy_conversion
+    energy_unit = options.energy_unit
     delta = None
     if options.calc_deltaF and options.delta_threshold is not None:
-        delta = _compute_delta_f(fes, grid_state, options, mesh)
+        delta_base = _compute_delta_f(fes, grid_state, options, mesh)
+        delta = delta_base * conv
         stats.delta_f = delta
     if options.backup:
         backup_file(outfilename)
@@ -141,6 +156,7 @@ def write_block_output(
             f.write(f"#! SET blocks_num {stats.blocks_num}\n")
         if stats.blocks_effective is not None:
             f.write(f"#! SET blocks_effective_num {stats.blocks_effective}\n")
+        f.write(f"#! SET energy_unit {energy_unit}\n")
         f.write(f"#! SET min_{names[0]} {axis_x.minimum}\n")
         f.write(f"#! SET max_{names[0]} {axis_x.maximum}\n")
         f.write(f"#! SET nbins_{names[0]} {axis_x.bins}\n")
@@ -152,8 +168,8 @@ def write_block_output(
             for i in range(axis_x.bins):
                 line = (f"{fmt}  {fmt} {fmt}") % (
                     axis_x.values[i],
-                    fes[i] - shift,
-                    fes_err[i],
+                    (fes[i] - shift) * conv,
+                    fes_err[i] * conv,
                 )
                 f.write(f"{line}\n")
         else:
@@ -178,8 +194,8 @@ def write_block_output(
                     line = (f"{fmt} {fmt}  {fmt} {fmt}") % (
                         x_mesh[i, j],
                         y_mesh[i, j],
-                        fes[i, j] - shift,
-                        fes_err[i, j],
+                        (fes[i, j] - shift) * conv,
+                        fes_err[i, j] * conv,
                     )
                     f.write(f"{line}\n")
                 f.write("\n")

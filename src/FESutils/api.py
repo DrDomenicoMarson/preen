@@ -3,7 +3,7 @@ import sys
 import numpy as np
 import pandas as pd
 
-from FESutils.constants import KB_KJ_MOL, ERROR_PREFIX
+from FESutils.constants import KB_KJ_MOL, ERROR_PREFIX, energy_conversion_factor
 from FESutils.colvar_io import load_colvar_data, open_text_file
 from FESutils.fes_config import FESConfig
 from FESutils.grid import build_grid, GridAxis, GridData
@@ -114,6 +114,7 @@ def calculate_fes(config: FESConfig):
     der_fes_y = grid_state.der_fes_y
     calc_deltaF = config.calculate_delta_f
     ts = config.delta_f_threshold
+    output_conv = energy_conversion_factor("kJ/mol", config.output_energy_unit)
     
     if calc_deltaF and (ts <= grid_min_x or ts >= grid_max_x):
         print(" +++ WARNING: the provided --deltaFat is out of the CV grid +++")
@@ -145,6 +146,8 @@ def calculate_fes(config: FESConfig):
         delta_threshold=ts,
         kbt=kbt,
         backup=config.backup,
+        energy_unit=config.output_energy_unit,
+        energy_conversion=output_conv,
     )
     
     names = (name_cv_x, name_cv_y if dim2 else None)
@@ -184,9 +187,9 @@ def calculate_fes(config: FESConfig):
         if config.plot:
             label = f"{chunk_start}-{chunk_end-1}"
             if stride == len_tot:
-                plot_manager.record_standard_surface(fes)
+                plot_manager.record_standard_surface(fes * output_conv)
             else:
-                plot_manager.add_stride_surface(fes, label)
+                plot_manager.add_stride_surface(fes * output_conv, label)
         if block_av:
             block_logweight[it - 1] = bias_norm_shift
             block_fes[it - 1] = fes
@@ -255,7 +258,12 @@ def calculate_fes(config: FESConfig):
             block_outfile, grid_state, names, output_options, stats, fes_err, mesh_tuple
         )
         if config.plot:
-            plot_manager.save_block_plots(block_err_plot, fes_block, fes_err, names)
+            plot_manager.save_block_plots(
+                block_err_plot,
+                fes_block * output_conv,
+                fes_err * output_conv,
+                names,
+            )
         np.copyto(grid_state.fes, original_fes)
     print("                                                            ")
 
@@ -325,6 +333,7 @@ def calculate_fes_from_state(config: FESConfig):
     
     if len(fields_pos) == 0:
         raise ValueError(f"{ERROR_PREFIX} no FIELDS found in file {config.filename}")
+    output_conv = energy_conversion_factor("kJ/mol", config.output_energy_unit)
     
     # Note: config doesn't have 'all_stored' flag in FESConfig definition yet?
     # We might need to add it or assume False.
@@ -570,7 +579,9 @@ def calculate_fes_from_state(config: FESConfig):
             calc_deltaF=(config.delta_f_threshold is not None),
             delta_threshold=config.delta_f_threshold,
             kbt=config.kbt,
-            backup=config.backup
+            backup=config.backup,
+            energy_unit=config.output_energy_unit,
+            energy_conversion=output_conv,
         )
         
         stats = SampleStats(
@@ -594,7 +605,7 @@ def calculate_fes_from_state(config: FESConfig):
                 mintozero=options.mintozero,
                 mesh=mesh_tuple
             )
-            plot_manager.record_standard_surface(grid_state.fes)
+            plot_manager.record_standard_surface(grid_state.fes * output_conv)
             
             if out_name.lower().endswith(".dat"):
                 png_name = out_name[:-4] + ".png"
