@@ -23,5 +23,8 @@ dependencies = [
 [project.urls]
 "Homepage" = "https://github.com/DrDomenicoMarson/preen"
 
+[project.scripts]
+preen = "FESutils.cli:main"
+
 [tool.setuptools.packages.find]
 where = ["src"]

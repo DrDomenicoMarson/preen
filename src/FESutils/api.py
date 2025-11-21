@@ -16,7 +16,7 @@ from FESutils.kernel_eval import (
 from FESutils.fes_output import OutputOptions, SampleStats, write_standard_output, write_block_output
 from FESutils.fes_plot import PlotManager
 
-def calculate_fes(config: FESConfig):
+def calculate_fes(config: FESConfig, merge_result=None):
     """
     Calculate FES from COLVAR data (reweighting).
     """
@@ -39,7 +39,7 @@ def calculate_fes(config: FESConfig):
         except ValueError:
             return path
 
-    colvar_data = load_colvar_data(config)
+    colvar_data = load_colvar_data(config, merge_result=merge_result)
     samples = create_sample_state(colvar_data)
     len_tot = samples.len_tot
     name_cv_x = samples.name_cv_x
