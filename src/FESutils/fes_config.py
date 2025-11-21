@@ -1,3 +1,4 @@
+import math
 from dataclasses import dataclass
 from FESutils.constants import KB_KJ_MOL, normalize_energy_unit
 
@@ -37,11 +38,13 @@ class FESConfig:
             # Calculate kbt from temp
             object.__setattr__(self, 'kbt', self.temp * KB_KJ_MOL)
         elif self.temp is not None:
-             # Both provided, check consistency or just warn? 
-             # For simplicity, let's trust kbt if provided, or maybe ensure consistency.
-             # Let's just allow kbt to take precedence if both are there, or raise error.
-             # Plan said: "Calculate kbt from temp if kbt is missing".
-             pass
+            expected_kbt = self.temp * KB_KJ_MOL
+            if not math.isclose(self.kbt, expected_kbt, rel_tol=1e-6, abs_tol=1e-9):
+                raise ValueError(
+                    "Conflicting kbt and temp provided: "
+                    f"kbt={self.kbt} vs temp-derived {expected_kbt} (kJ/mol). "
+                    "Provide only one or make them consistent."
+                )
         # Normalize energy units
         object.__setattr__(
             self, "input_energy_unit", normalize_energy_unit(self.input_energy_unit)
