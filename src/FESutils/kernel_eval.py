@@ -262,3 +262,120 @@ def _numba_fes_der_2d(
             der_x_out[grid_i, grid_j] = -kbt_local * (der_x_sum / total)
             der_y_out[grid_i, grid_j] = -kbt_local * (der_y_sum / total)
     return fes_out, der_x_out, der_y_out
+
+
+@njit(parallel=True)
+def _numba_calc_prob_1d(grid_x, center_x, sigma_x, height, period_x, val_at_cutoff):
+    n_grid = len(grid_x)
+    n_kernels = len(center_x)
+    prob = np.zeros(n_grid)
+    
+    for i in prange(n_grid):
+        p_val = 0.0
+        gx = grid_x[i]
+        for k in range(n_kernels):
+            dist = _normalized_distance(gx, center_x[k], sigma_x[k], period_x)
+            # kernels_i=height*(np.maximum(np.exp(-0.5*dist_x*dist_x)-val_at_cutoff,0))
+            gauss = np.exp(-0.5 * dist * dist)
+            val = gauss - val_at_cutoff
+            if val > 0:
+                p_val += height[k] * val
+        prob[i] = p_val
+    return prob
+
+@njit(parallel=True)
+def _numba_calc_der_prob_1d(grid_x, center_x, sigma_x, height, period_x, val_at_cutoff):
+    n_grid = len(grid_x)
+    n_kernels = len(center_x)
+    der = np.zeros(n_grid)
+    
+    for i in prange(n_grid):
+        d_val = 0.0
+        gx = grid_x[i]
+        for k in range(n_kernels):
+            dist_norm = _normalized_distance(gx, center_x[k], sigma_x[k], period_x)
+            dist_sq = dist_norm * dist_norm
+            gauss = np.exp(-0.5 * dist_sq)
+            val = gauss - val_at_cutoff
+            if val > 0:
+                # Re-eval distance for derivative:
+                dx = gx - center_x[k]
+                if period_x > 0:
+                    # Wrap dx to [-period/2, period/2]
+                    half_p = period_x / 2.0
+                    if dx > half_p: dx -= period_x
+                    elif dx < -half_p: dx += period_x
+                
+                grad_term = -dx / (sigma_x[k]**2) * gauss
+                d_val += height[k] * grad_term
+        der[i] = d_val
+    return der
+
+@njit(parallel=True)
+def _numba_calc_prob_2d(grid_x, grid_y, center_x, center_y, sigma_x, sigma_y, height, period_x, period_y, val_at_cutoff):
+    nx, ny = grid_x.shape
+    n_kernels = len(center_x)
+    prob = np.zeros((nx, ny))
+    
+    for i in prange(nx):
+        for j in range(ny):
+            gx = grid_x[i, j]
+            gy = grid_y[i, j]
+            p_val = 0.0
+            for k in range(n_kernels):
+                dx = _normalized_distance(gx, center_x[k], sigma_x[k], period_x)
+                dy = _normalized_distance(gy, center_y[k], sigma_y[k], period_y)
+                dist_sq = dx*dx + dy*dy
+                gauss = np.exp(-0.5 * dist_sq)
+                val = gauss - val_at_cutoff
+                if val > 0:
+                    p_val += height[k] * val
+            prob[i, j] = p_val
+    return prob
+
+@njit(parallel=True)
+def _numba_calc_der_prob_2d(grid_x, grid_y, center_x, center_y, sigma_x, sigma_y, height, period_x, period_y, val_at_cutoff):
+    nx, ny = grid_x.shape
+    n_kernels = len(center_x)
+    der_x = np.zeros((nx, ny))
+    der_y = np.zeros((nx, ny))
+    
+    for i in prange(nx):
+        for j in range(ny):
+            gx = grid_x[i, j]
+            gy = grid_y[i, j]
+            dx_val = 0.0
+            dy_val = 0.0
+            for k in range(n_kernels):
+                # Need signed distances
+                diff_x = gx - center_x[k]
+                if period_x > 0:
+                    hp = period_x/2
+                    if diff_x > hp: diff_x -= period_x
+                    elif diff_x < -hp: diff_x += period_x
+                
+                diff_y = gy - center_y[k]
+                if period_y > 0:
+                    hp = period_y/2
+                    if diff_y > hp: diff_y -= period_y
+                    elif diff_y < -hp: diff_y += period_y
+                
+                sx = sigma_x[k]
+                sy = sigma_y[k]
+                
+                # Normalized abs dists for check
+                ndx = np.abs(diff_x)/sx
+                ndy = np.abs(diff_y)/sy
+                
+                dist_sq = ndx*ndx + ndy*ndy
+                gauss = np.exp(-0.5 * dist_sq)
+                val = gauss - val_at_cutoff
+                
+                if val > 0:
+                    # grad_x = - diff_x / sx^2 * gauss
+                    dx_val += height[k] * (-diff_x / (sx*sx) * gauss)
+                    dy_val += height[k] * (-diff_y / (sy*sy) * gauss)
+            
+            der_x[i, j] = dx_val
+            der_y[i, j] = dy_val
+    return der_x, der_y

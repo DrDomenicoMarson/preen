@@ -1,0 +1,27 @@
+[build-system]
+requires = ["setuptools>=61.0"]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "prin"
+version = "0.1.0"
+description = "Utilities plumed COLVAR and FES analysis."
+readme = "README.md"
+requires-python = ">=3.11"
+classifiers = [
+    "Programming Language :: Python :: 3",
+    "License :: OSI Approved :: MIT License",
+    "Operating System :: OS Independent",
+]
+dependencies = [
+    "numpy",
+    "pandas",
+    "numba",
+    "matplotlib",
+]
+
+[project.urls]
+"Homepage" = "https://github.com/DrDomenicoMarson/preen"
+
+[tool.setuptools.packages.find]
+where = ["src"]
