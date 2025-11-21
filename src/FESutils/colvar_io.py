@@ -218,18 +218,22 @@ def open_text_file(filename: str) -> Generator[IO[str], None, None]:
     """
     if filename.endswith(".tgz") or filename.endswith(".tar.gz"):
         with tarfile.open(filename, "r:*") as tar:
-            # Find first regular file, skipping macOS metadata files (._*)
-            member = next(
-                (
-                    m
-                    for m in tar.getmembers()
-                    if m.isfile() and not os.path.basename(m.name).startswith("._")
-                ),
-                None,
-            )
-            if member is None:
+            # Collect regular files, skipping macOS metadata files (._*)
+            members = [
+                m
+                for m in tar.getmembers()
+                if m.isfile() and not os.path.basename(m.name).startswith("._")
+            ]
+            if not members:
                 raise ValueError(f"{ERROR_PREFIX} no valid file found in archive {filename}")
-            
+            if len(members) > 1:
+                names = ", ".join(os.path.basename(m.name) for m in members[:5])
+                extra = "" if len(members) <= 5 else ", ..."
+                raise ValueError(
+                    f"{ERROR_PREFIX} multiple files found in archive {filename}: {names}{extra}. "
+                    "Only single-file archives are supported."
+                )
+            member = members[0]
             f = tar.extractfile(member)
             if f is None:
                  raise ValueError(f"{ERROR_PREFIX} could not extract {member.name}")
