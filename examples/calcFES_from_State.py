@@ -12,23 +12,18 @@ def main():
     # Define configuration
     base_dir = os.path.dirname(os.path.abspath(__file__))
     example_data_dir = os.path.join(base_dir, 'data')
-    
-    # Note: KERNELSforRST might not be compressed in example_data by default, 
-    # but our API supports both.
+
     state_file = os.path.join(example_data_dir, 'KERNELSforRST')
-    
+
     config = FESConfig(
         filename=state_file,
         outfile='fes-state.dat',
-        sigma=(0.0,), # Not used for state file (read from file), but required by config init
-        kbt=2.49433863, # 300 K
-        cv_spec=(), # Not used for state file (read from file)
-        bias_spec='', # Not used
+        temp=300.0,
         grid_bin=(100, 100),
         plot=True,
         backup=True
     )
-    
+
     print("Running FES calculation (From State)...")
     try:
         calculate_fes_from_state(config)

@@ -17,8 +17,8 @@ def main():
     config = FESConfig(
         filename=os.path.join(example_data_dir, 'COLVAR_merged.tgz'),
         outfile='fes-rew.dat',
+        temp=300.0,
         sigma=(0.05, 5.0),
-        kbt=2.49433863, # 300 K * 0.0083144621
         cv_spec=('dT.z', 'tiltAvg'),
         bias_spec='opes.bias',
         grid_bin=(50, 50),

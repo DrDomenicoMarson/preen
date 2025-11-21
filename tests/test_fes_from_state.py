@@ -11,7 +11,7 @@ from FESutils.constants import KB_KJ_MOL
 @pytest.fixture(scope="module")
 def state_env():
     """Set up and tear down the state test environment."""
-    base_dir = os.getcwd()
+    base_dir = os.path.dirname(os.path.abspath(__file__))
     test_dir = os.path.join(base_dir, 'test_state_output')
     if os.path.exists(test_dir):
         shutil.rmtree(test_dir)
@@ -41,11 +41,8 @@ def test_run_kernels_for_rst(state_env):
     config = FESConfig(
         filename=state_env['kernels_file'],
         outfile=state_env['outfile'],
-        kbt=300.0 * KB_KJ_MOL,
+        temp=300.0,
         grid_bin=(100, 100),
-        sigma=(0.0,), # Dummy
-        cv_spec=(), # Dummy
-        bias_spec='', # Dummy
         backup=False,
         plot=True
     )

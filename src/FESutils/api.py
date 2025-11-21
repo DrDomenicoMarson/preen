@@ -20,6 +20,13 @@ def calculate_fes(config: FESConfig):
     """
     Calculate FES from COLVAR data (reweighting).
     """
+    if config.sigma is None:
+        raise ValueError(f"{ERROR_PREFIX} sigma is required for reweighting")
+    if config.cv_spec is None:
+        raise ValueError(f"{ERROR_PREFIX} cv_spec is required for reweighting")
+    if config.bias_spec is None:
+        raise ValueError(f"{ERROR_PREFIX} bias_spec is required for reweighting")
+
     if config.dimension > 2:
         raise ValueError(f"{ERROR_PREFIX} only 1 or 2 dimensional bias are supported")
         

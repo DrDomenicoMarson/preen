@@ -69,7 +69,7 @@ def test_1_dZ(regression_env):
     config = FESConfig(
         filename=regression_env['colvar_file'],
         outfile=outfile,
-        kbt=300.0 * KB_KJ_MOL,
+        temp=300.0,
         grid_bin=(100,),
         sigma=(0.05,),
         cv_spec=('dT.z',),

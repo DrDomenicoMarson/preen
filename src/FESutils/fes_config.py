@@ -1,4 +1,5 @@
 from dataclasses import dataclass
+from FESutils.constants import KB_KJ_MOL
 
 @dataclass(frozen=True)
 class FESConfig:
@@ -6,10 +7,11 @@ class FESConfig:
 
     filename: str
     outfile: str
-    sigma: tuple[float, ...]
-    kbt: float
-    cv_spec: tuple[str, ...]
-    bias_spec: str
+    kbt: None | float = None
+    temp: None | float = None
+    sigma: None | tuple[float, ...] = None
+    cv_spec: None | tuple[str, ...] = None
+    bias_spec: None | str = None
     grid_min: None | tuple[float, ...] = None
     grid_max: None | tuple[float, ...] = None
     grid_bin: tuple[int, ...] = (100, 100)
@@ -25,6 +27,19 @@ class FESConfig:
     fmt: str = "% 12.6f"
     plot: bool = False
     backup: bool = False
+
+    def __post_init__(self):
+        if self.kbt is None:
+            if self.temp is None:
+                raise ValueError("Either 'kbt' or 'temp' must be provided.")
+            # Calculate kbt from temp
+            object.__setattr__(self, 'kbt', self.temp * KB_KJ_MOL)
+        elif self.temp is not None:
+             # Both provided, check consistency or just warn? 
+             # For simplicity, let's trust kbt if provided, or maybe ensure consistency.
+             # Let's just allow kbt to take precedence if both are there, or raise error.
+             # Plan said: "Calculate kbt from temp if kbt is missing".
+             pass
 
     @property
     def dimension(self) -> int:
