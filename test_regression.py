@@ -30,7 +30,7 @@ class TestFESRegression(unittest.TestCase):
         cls.base_dir = os.path.dirname(os.path.abspath(__file__))
         cls.example_data_dir = os.path.join(cls.base_dir, 'example_data')
         cls.reference_dir = os.path.join(cls.example_data_dir, 'res_fromKERNELS_reference')
-        cls.colvar_file = os.path.join(cls.example_data_dir, 'COLVAR_merged.dat')
+        cls.colvar_file = os.path.join(cls.example_data_dir, 'COLVAR_merged.tgz')
         cls.test_output_dir = os.path.join(cls.base_dir, 'test_regression_output')
         
         if not os.path.exists(cls.test_output_dir):

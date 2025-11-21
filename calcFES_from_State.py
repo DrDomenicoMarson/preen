@@ -10,6 +10,7 @@ import argparse
 import numpy as np
 import pandas as pd
 from FESutils.constants import KB_KJ_MOL, ERROR_PREFIX
+from FESutils.colvar_io import open_text_file
 from FESutils.fes_config import FESConfig
 from FESutils.grid import GridAxis, GridData
 from FESutils.fes_state import GridRuntimeState, create_grid_runtime_state
@@ -185,7 +186,9 @@ def main(argv=None):
     # 1. Load Data
     try:
         # Try using pandas which is standard
-        data_df = pd.read_table(args.filename, sep=r"\s+", header=None, dtype=str, comment=None)
+        # Use open_text_file to handle compression
+        with open_text_file(args.filename) as f:
+            data_df = pd.read_table(f, sep=r"\s+", header=None, dtype=str, comment=None)
         data = data_df.to_numpy()
     except Exception as e:
         raise RuntimeError(f"{ERROR_PREFIX} failed to read {args.filename}: {e}")
