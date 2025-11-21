@@ -1,27 +1,16 @@
 import unittest
 import os
 import shutil
-import sys
 import numpy as np
 import glob
-import calcFES
+import FESutils.api
+from FESutils.fes_config import FESConfig
+from FESutils.constants import KB_KJ_MOL
 
-# Mock matplotlib before importing modules that use it
-from unittest.mock import MagicMock
-mock_plt = MagicMock()
-
-def mock_subplots(*args, **kwargs):
-    fig = MagicMock()
-    ax = MagicMock()
-    return fig, ax
-
-mock_plt.subplots.side_effect = mock_subplots
-mock_plt.get_cmap.return_value = MagicMock()
-mock_plt.Normalize.return_value = MagicMock()
-mock_plt.cm.ScalarMappable.return_value = MagicMock()
-
-sys.modules['matplotlib'] = MagicMock()
-sys.modules['matplotlib.pyplot'] = mock_plt
+# Use Agg backend for headless testing
+import matplotlib
+matplotlib.use('Agg')
+import matplotlib.pyplot as plt
 
 
 class TestFESRegression(unittest.TestCase):
@@ -41,9 +30,9 @@ class TestFESRegression(unittest.TestCase):
         if os.path.exists(cls.test_output_dir):
             shutil.rmtree(cls.test_output_dir)
 
-    def run_fes(self, args):
-        """Helper to run calcFESs with given arguments."""
-        calcFES.main(args)
+    def run_fes(self, config):
+        """Helper to run FES calculation with given config."""
+        FESutils.api.calculate_fes(config)
 
     def compare_files(self, test_file, ref_file):
         """Compare two FES output files numerically."""
@@ -72,32 +61,34 @@ class TestFESRegression(unittest.TestCase):
     def test_1_dZ(self):
         """Test 1: 1D FES for dT.z"""
         outfile = os.path.join(self.test_output_dir, 'dZ.dat')
-        args = [
-            '--colvar', self.colvar_file,
-            '--outfile', outfile,
-            '--temp', '300',
-            '--bin', '100',
-            '--sigma', '0.05',
-            '--cv', 'dT.z',
-            '--bias', 'opes.bias',
-        ]
-        self.run_fes(args)
+        config = FESConfig(
+            filename=self.colvar_file,
+            outfile=outfile,
+            kbt=300.0 * KB_KJ_MOL,
+            grid_bin=(100,),
+            sigma=(0.05,),
+            cv_spec=('dT.z',),
+            bias_spec='opes.bias',
+            plot=True
+        )
+        self.run_fes(config)
         self.compare_files(outfile, os.path.join(self.reference_dir, 'dZ.dat'))
 
     def test_2_dZ_16block(self):
         """Test 2: 1D FES with blocks"""
         outfile = os.path.join(self.test_output_dir, 'dZ_16block.dat')
-        args = [
-            '--colvar', self.colvar_file,
-            '--outfile', outfile,
-            '--temp', '300',
-            '--bin', '100',
-            '--sigma', '0.05',
-            '--cv', 'dT.z',
-            '--bias', 'opes.bias',
-            '--blocks', '16',
-        ]
-        self.run_fes(args)
+        config = FESConfig(
+            filename=self.colvar_file,
+            outfile=outfile,
+            kbt=300.0 * KB_KJ_MOL,
+            grid_bin=(100,),
+            sigma=(0.05,),
+            cv_spec=('dT.z',),
+            bias_spec='opes.bias',
+            blocks_num=16,
+            plot=True
+        )
+        self.run_fes(config)
         # When blocks are used, the final output is in a 'block' subdirectory
         block_outfile = os.path.join(os.path.dirname(outfile), 'block', os.path.basename(outfile))
         # Reference file is also in a block subdirectory
@@ -107,17 +98,18 @@ class TestFESRegression(unittest.TestCase):
     def test_3_dZ_stride(self):
         """Test 3: 1D FES with stride"""
         outfile = os.path.join(self.test_output_dir, 'dZ_500000stride.dat')
-        args = [
-            '--colvar', self.colvar_file,
-            '--outfile', outfile,
-            '--temp', '300',
-            '--bin', '100',
-            '--sigma', '0.05',
-            '--cv', 'dT.z',
-            '--bias', 'opes.bias',
-            '--stride', '500000',
-        ]
-        self.run_fes(args)
+        config = FESConfig(
+            filename=self.colvar_file,
+            outfile=outfile,
+            kbt=300.0 * KB_KJ_MOL,
+            grid_bin=(100,),
+            sigma=(0.05,),
+            cv_spec=('dT.z',),
+            bias_spec='opes.bias',
+            stride=500000,
+            plot=True
+        )
+        self.run_fes(config)
         
         stride_dir = os.path.join(os.path.dirname(outfile), 'stride')
         self.assertTrue(os.path.exists(stride_dir))
@@ -129,17 +121,18 @@ class TestFESRegression(unittest.TestCase):
     def test_4_2D_simple(self):
         """Test 6: Simple 2D FES execution (no blocks/stride)"""
         outfile = os.path.join(self.test_output_dir, '2D_simple.dat')
-        args = [
-            '--colvar', self.colvar_file,
-            '--outfile', outfile,
-            '--temp', '300',
-            '--bin', '50,50',
-            '--sigma', '0.05,5',
-            '--cv', 'dT.z,tiltAvg',
-            '--bias', 'opes.bias',
-        ]
+        config = FESConfig(
+            filename=self.colvar_file,
+            outfile=outfile,
+            kbt=300.0 * KB_KJ_MOL,
+            grid_bin=(50, 50),
+            sigma=(0.05, 5.0),
+            cv_spec=('dT.z', 'tiltAvg'),
+            bias_spec='opes.bias',
+            plot=True
+        )
         print("\nRunning simple 2D test...")
-        self.run_fes(args)
+        self.run_fes(config)
         self.assertTrue(os.path.exists(outfile))
 
 if __name__ == '__main__':

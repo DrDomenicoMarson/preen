@@ -2,8 +2,11 @@ import unittest
 import os
 import shutil
 import numpy as np
-import calcFES_from_State
-from unittest.mock import patch
+import matplotlib
+matplotlib.use('Agg')
+import FESutils.api
+from FESutils.fes_config import FESConfig
+from FESutils.constants import KB_KJ_MOL
 
 class TestFESFromState(unittest.TestCase):
     @classmethod
@@ -27,16 +30,20 @@ class TestFESFromState(unittest.TestCase):
         if not os.path.exists(self.kernels_file):
             self.skipTest(f"KERNELSforRST not found at {self.kernels_file}")
 
-        args = [
-            '--state', self.kernels_file,
-            '--outfile', self.outfile,
-            '--temp', '300',
-            '--bin', '100,100',
-            '--no-backup' # Simplify testing
-        ]
+        config = FESConfig(
+            filename=self.kernels_file,
+            outfile=self.outfile,
+            kbt=300.0 * KB_KJ_MOL,
+            grid_bin=(100, 100),
+            sigma=(0.0,), # Dummy
+            cv_spec=(), # Dummy
+            bias_spec='', # Dummy
+            backup=False,
+            plot=True
+        )
         
         # Run main
-        calcFES_from_State.main(args)
+        FESutils.api.calculate_fes_from_state(config)
         
         # Check output exists
         self.assertTrue(os.path.exists(self.outfile))

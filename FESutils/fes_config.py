@@ -10,19 +10,19 @@ class FESConfig:
     kbt: float
     cv_spec: tuple[str, ...]
     bias_spec: str
-    grid_min: None | tuple[float, ...]
-    grid_max: None | tuple[float, ...]
-    grid_bin: tuple[int, ...]
-    blocks_num: int
-    block_seed: None | int
-    stride: int
-    random_blocks: bool
-    skiprows: int
-    mintozero: bool
-    reverse: bool
-    calc_der: bool
-    delta_f_threshold: None | float
-    fmt: str
+    grid_min: None | tuple[float, ...] = None
+    grid_max: None | tuple[float, ...] = None
+    grid_bin: tuple[int, ...] = (100, 100)
+    blocks_num: int = 1
+    block_seed: None | int = None
+    stride: int = 0
+    random_blocks: bool = False
+    skiprows: int = 0
+    mintozero: bool = True
+    reverse: bool = False
+    calc_der: bool = False
+    delta_f_threshold: None | float = None
+    fmt: str = "% 12.6f"
     plot: bool = False
     backup: bool = False
 
