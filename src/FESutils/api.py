@@ -65,6 +65,9 @@ def calculate_fes(config: FESConfig):
     output_dir = os.path.dirname(outfile)
     base_name = os.path.basename(outfile)
     root_name, ext = os.path.splitext(base_name)
+    # Ensure parent directory exists if provided
+    if output_dir:
+        os.makedirs(output_dir, exist_ok=True)
     
     if config.random_blocks:
         if config.blocks_num == 1:
@@ -571,6 +574,9 @@ def calculate_fes_from_state(config: FESConfig):
 
         # Output
         out_name = config.outfile
+        out_dir = os.path.dirname(out_name)
+        if out_dir:
+            os.makedirs(out_dir, exist_ok=True)
         # Handle numbering if we supported multiple
         
         options = OutputOptions(
