@@ -1,9 +1,15 @@
 from dataclasses import dataclass
 from collections.abc import Sequence
+import os
 
 import numpy as np
 from numpy.typing import NDArray
 import pandas as pd
+import tarfile
+import gzip
+import io
+import contextlib
+from typing import IO, Generator
 
 from .fes_config import FESConfig
 from .constants import ERROR_PREFIX
@@ -40,7 +46,7 @@ class ColvarData:
 
 def load_colvar_data(config: FESConfig) -> ColvarData:
     """Read COLVAR file according to the user configuration."""
-    with open(config.filename, "r") as f:
+    with open_text_file(config.filename) as f:
         fields = f.readline().split()
         if len(fields) < 2 or fields[1] != "FIELDS":
             raise ValueError(f'{ERROR_PREFIX} no FIELDS found in "{config.filename}"')
@@ -53,15 +59,22 @@ def load_colvar_data(config: FESConfig) -> ColvarData:
     skip_rows = metadata.header_lines + config.skiprows
     required_cols = [info.column for info in metadata.cvs] + metadata.bias.columns
     required_cols = sorted(set(required_cols))
-    data = pd.read_table(
-        config.filename,
-        dtype=float,
-        sep=r"\s+",
-        comment="#",
-        header=None,
-        usecols=required_cols,
-        skiprows=skip_rows,
-    )
+    # Re-open file for pandas to read data
+    # Note: We cannot easily reuse the 'f' from above if it was a stream from tarfile
+    # that doesn't support seek(0).
+    # However, we know header_lines.
+    # If we use open_text_file again, we get a fresh stream.
+    
+    with open_text_file(config.filename) as f_data:
+        data = pd.read_table(
+            f_data,
+            dtype=float,
+            sep=r"\s+",
+            comment="#",
+            header=None,
+            usecols=required_cols,
+            skiprows=skip_rows,
+        )
     if data.isnull().values.any():
         raise ValueError(
             f"{ERROR_PREFIX} your COLVAR file contains NaNs. Check if last line is truncated"
@@ -193,3 +206,39 @@ def _convert_token(value: str) -> float:
     if value == "pi":
         return np.pi
     return float(value)
+
+
+@contextlib.contextmanager
+def open_text_file(filename: str) -> Generator[IO[str], None, None]:
+    """
+    Open a file as text, handling compression transparently.
+    Supports .tgz, .tar.gz, .gz, and plain text.
+    For tar files, opens the first member.
+    """
+    if filename.endswith(".tgz") or filename.endswith(".tar.gz"):
+        with tarfile.open(filename, "r:*") as tar:
+            # Find first regular file, skipping macOS metadata files (._*)
+            member = next(
+                (
+                    m
+                    for m in tar.getmembers()
+                    if m.isfile() and not os.path.basename(m.name).startswith("._")
+                ),
+                None,
+            )
+            if member is None:
+                raise ValueError(f"{ERROR_PREFIX} no valid file found in archive {filename}")
+            
+            f = tar.extractfile(member)
+            if f is None:
+                 raise ValueError(f"{ERROR_PREFIX} could not extract {member.name}")
+            
+            # Wrap in TextIOWrapper
+            with io.TextIOWrapper(f, encoding="utf-8") as text_f:
+                yield text_f
+    elif filename.endswith(".gz"):
+        with gzip.open(filename, "rt", encoding="utf-8") as f:
+            yield f
+    else:
+        with open(filename, "r", encoding="utf-8") as f:
+            yield f
