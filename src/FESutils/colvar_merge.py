@@ -166,8 +166,18 @@ def merge_colvar_files(
     discard_count = int(data_lines_first * discard_fraction)
 
     raw_indexed: dict[int, list[str]] = {} if keep_order else {}
-    raw_concat: list[str] = [] if not keep_order else []
+    raw_concat: list[str] = [] if (not keep_order and build_dataframe) else []
     valid_sources: list[Path] = []
+    row_count = 0
+
+    streaming_path = (
+        output_path is not None and not build_dataframe and not keep_order and not time_ordered
+    )
+    out_handle = None
+    if streaming_path:
+        out_handle = open(output_path, "w", encoding="utf-8")
+        for line in header_lines:
+            out_handle.write(line if line.endswith("\n") else f"{line}\n")
 
     for idx, path in enumerate(files, start=1):
         # Validate header matches first file
@@ -189,6 +199,7 @@ def merge_colvar_files(
                     if not line.endswith("\n"):
                         line += "\n"
                     raw_indexed.setdefault(line_idx, []).append(line)
+                    row_count += 1
             else:
                 for line in handle:
                     if line.startswith("#"):
@@ -198,7 +209,11 @@ def merge_colvar_files(
                         continue
                     if not line.endswith("\n"):
                         line += "\n"
-                    raw_concat.append(line)
+                    row_count += 1
+                    if streaming_path and out_handle is not None:
+                        out_handle.write(line)
+                    elif build_dataframe:
+                        raw_concat.append(line)
         valid_sources.append(path)
         if verbose:
             print(f"Loading COLVAR files: {idx}/{total_files}", end="\r", flush=True)
@@ -206,7 +221,14 @@ def merge_colvar_files(
     if verbose:
         print(f"Loading COLVAR files: {len(valid_sources)}/{total_files} (done)          ")
 
-    if keep_order:
+    if streaming_path:
+        if out_handle is not None:
+            out_handle.flush()
+            out_handle.close()
+        merged_lines: list[str] = []
+        merged_df = pd.DataFrame(columns=fields)
+        time_col = "time" if "time" in fields else None
+    elif keep_order:
         merged_lines: list[str] = []
         for idx in sorted(raw_indexed.keys()):
             merged_lines.extend(raw_indexed[idx])
@@ -216,15 +238,16 @@ def merge_colvar_files(
     if not merged_lines:
         raise RuntimeError("No valid COLVAR data found to merge.")
 
-    row_count = len(merged_lines)
+    if not streaming_path:
+        row_count = len(merged_lines)
     merged_df: pd.DataFrame
     time_col = None
-    if build_dataframe:
+    if build_dataframe and not streaming_path:
         arrays = [np.fromstring(l, sep=" ") for l in merged_lines]
         merged_data = np.vstack(arrays)
         merged_df = pd.DataFrame(merged_data, columns=fields, copy=False)
         time_col = "time" if "time" in merged_df.columns else None
-    else:
+    elif not streaming_path:
         merged_df = pd.DataFrame(columns=fields)
         time_col = "time" if "time" in fields else None
 
@@ -237,7 +260,7 @@ def merge_colvar_files(
     if build_dataframe and keep_order and not time_ordered:
         merged_df = merged_df.reset_index(drop=True)
 
-    if output_path:
+    if output_path and not streaming_path:
         if verbose:
             print("Writing merged COLVAR...", end="\r", flush=True)
         _write_colvar(Path(output_path), header_lines, merged_df if build_dataframe else merged_lines)
