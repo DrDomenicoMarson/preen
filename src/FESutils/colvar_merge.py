@@ -60,6 +60,7 @@ class MergeResult:
     header_lines: list[str]
     source_files: list[Path]
     time_column: str | None
+    row_count: int
 
 
 def _read_header_and_count(path: Path) -> tuple[list[str], list[str], int]:
@@ -134,6 +135,7 @@ def merge_colvar_files(
     time_ordered: bool = False,
     output_path: str | Path | None = None,
     verbose: bool = True,
+    build_dataframe: bool = True,
 ) -> MergeResult:
     """
     Merge COLVAR files located under base_dir.
@@ -143,9 +145,12 @@ def merge_colvar_files(
     - time_ordered: sort merged data by the time column (if present).
     - output_path: if provided, write merged data with the first header.
     - verbose: print progress information while loading files.
+    - build_dataframe: build numeric dataframe (set False to speed up merge-only CLI).
     """
     if not (0.0 <= discard_fraction <= 1.0):
         raise ValueError("discard_fraction must be between 0.0 and 1.0")
+    if time_ordered:
+        build_dataframe = True
 
     files = discover_colvar_files(base_dir, basename=basename)
     if not files:
@@ -211,24 +216,31 @@ def merge_colvar_files(
     if not merged_lines:
         raise RuntimeError("No valid COLVAR data found to merge.")
 
-    arrays = [np.fromstring(l, sep=" ") for l in merged_lines]
-    merged_data = np.vstack(arrays)
-    merged_df = pd.DataFrame(merged_data, columns=fields, copy=False)
+    row_count = len(merged_lines)
+    merged_df: pd.DataFrame
+    time_col = None
+    if build_dataframe:
+        arrays = [np.fromstring(l, sep=" ") for l in merged_lines]
+        merged_data = np.vstack(arrays)
+        merged_df = pd.DataFrame(merged_data, columns=fields, copy=False)
+        time_col = "time" if "time" in merged_df.columns else None
+    else:
+        merged_df = pd.DataFrame(columns=fields)
+        time_col = "time" if "time" in fields else None
 
-    time_col = "time" if "time" in merged_df.columns else None
     if time_ordered and time_col is None:
         time_col = merged_df.columns[0]
 
-    if time_ordered and time_col is not None:
+    if build_dataframe and time_ordered and time_col is not None:
         merged_df = merged_df.sort_values(time_col, kind="mergesort", ignore_index=True)
 
-    if keep_order and not time_ordered:
+    if build_dataframe and keep_order and not time_ordered:
         merged_df = merged_df.reset_index(drop=True)
 
     if output_path:
         if verbose:
             print("Writing merged COLVAR...", end="\r", flush=True)
-        _write_colvar(Path(output_path), header_lines, merged_df)
+        _write_colvar(Path(output_path), header_lines, merged_df if build_dataframe else merged_lines)
         if verbose:
             print(f"Wrote merged COLVAR to {output_path}          ")
 
@@ -238,14 +250,18 @@ def merge_colvar_files(
         header_lines=header_lines,
         source_files=valid_sources,
         time_column=time_col,
+        row_count=row_count,
     )
 
 
-def _write_colvar(path: Path, header_lines: list[str], df: pd.DataFrame) -> None:
+def _write_colvar(path: Path, header_lines: list[str], df: pd.DataFrame | list[str]) -> None:
     """
     Write merged COLVAR data using the provided header lines.
     """
     with open(path, "w", encoding="utf-8") as out:
         for line in header_lines:
             out.write(line if line.endswith("\n") else f"{line}\n")
-        np.savetxt(out, df.to_numpy(), fmt="%.10g")
+        if isinstance(df, list):
+            out.writelines(df)
+        else:
+            np.savetxt(out, df.to_numpy(), fmt="%.10g")

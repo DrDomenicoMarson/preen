@@ -152,8 +152,10 @@ def _handle_colvar_merge(args):
         time_ordered=args.time_ordered,
         output_path=args.output,
         verbose=not args.quiet,
+        build_dataframe=False,
     )
-    print(f"Merged {len(result.source_files)} file(s); total rows: {len(result.dataframe)}")
+    total_rows = result.row_count
+    print(f"Merged {len(result.source_files)} file(s); total rows: {total_rows}")
     if args.output:
         print(f"Wrote merged COLVAR to: {Path(args.output).resolve()}")
     return 0
