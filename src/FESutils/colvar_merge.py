@@ -71,50 +71,52 @@ def read_colvar_dataframe(
     Read a single COLVAR file into a dataframe, discarding malformed rows.
     Returns (header_lines, fields, dataframe) or None if fields mismatch/empty.
     """
+    # Parse header to get fields and header length
+    header_lines: list[str] = []
     with open_text_file(str(path)) as handle:
-        first = handle.readline()
-        if not first.startswith("#! FIELDS"):
-            return None
-        tokens = first.split()
-        fields = tokens[2:]
-        if expected_fields is not None and list(expected_fields) != fields:
-            return None
-        header_lines = [first]
-        for line in handle:
-            if line.startswith("#!"):
-                header_lines.append(line)
-            else:
+        while True:
+            pos = handle.tell()
+            line = handle.readline()
+            if not line:
                 break
-        # Collect valid rows; include the line we already read if it is data
-        rows: list[list[float]] = []
-        # If the previous line was data, process it
-        if line and not line.startswith("#"):
-            items = line.split()
-            if len(items) == len(fields):
-                try:
-                    rows.append([float(x) for x in items])
-                except ValueError:
-                    pass
-        for line in handle:
-            if not line or line.startswith("#"):
-                continue
-            items = line.split()
-            if len(items) != len(fields):
-                continue
-            try:
-                rows.append([float(x) for x in items])
-            except ValueError:
-                continue
-    if not rows:
+            if not line.startswith("#"):
+                handle.seek(pos)
+                break
+            header_lines.append(line)
+
+    if not header_lines:
         return None
-    drop = int(len(rows) * discard_fraction) if discard_fraction > 0 else 0
-    if drop >= len(rows):
-        rows = []
-    else:
-        rows = rows[drop:]
-    if not rows:
+    first = header_lines[0]
+    if not first.startswith("#! FIELDS"):
         return None
-    df = pd.DataFrame(rows, columns=fields, dtype=float)
+    fields = first.split()[2:]
+    if expected_fields is not None and list(expected_fields) != fields:
+        return None
+
+    header_len = len(header_lines)
+    # Fast read with pandas; skip malformed rows automatically
+    df = pd.read_table(
+        path,
+        delim_whitespace=True,
+        comment="#",
+        header=None,
+        names=fields,
+        skiprows=header_len,
+        dtype=str,
+        engine="python",
+        on_bad_lines="skip",
+    )
+    if not df.empty:
+        df = df.apply(pd.to_numeric, errors="coerce")
+        df = df.dropna()
+    if df.empty:
+        return None
+    drop = int(len(df) * discard_fraction) if discard_fraction > 0 else 0
+    if drop >= len(df):
+        return None
+    if drop > 0:
+        df = df.iloc[drop:]
+    df = df.reset_index(drop=True)
     return header_lines, fields, df
 
 
