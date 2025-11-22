@@ -94,36 +94,30 @@ def read_colvar_dataframe(
     Read a single COLVAR file into a dataframe, discarding malformed rows.
     Returns (header_lines, fields, dataframe) or None if fields mismatch/empty.
     """
-    header_lines, fields, data_lines_first = _read_header_and_count(path)
+    header_lines, fields, data_lines = _read_header_and_count(path)
     if not header_lines:
         return None
     if expected_fields is not None and list(expected_fields) != fields:
         return None
 
-    header_len = len(header_lines)
-    raw_lines: list[str] = []
-    with open_text_file(str(path)) as handle:
-        for _ in range(header_len):
-            next(handle, None)
-        for line in handle:
-            if not line or line.startswith("#"):
-                continue
-            parts = line.split()
-            if len(parts) != len(fields):
-                continue
-            if not line.endswith("\n"):
-                line = line + "\n"
-            raw_lines.append(line)
-    if not raw_lines:
+    drop = int(data_lines * discard_fraction) if discard_fraction > 0 else 0
+    if drop >= data_lines:
         return None
-    drop = int(len(raw_lines) * discard_fraction) if discard_fraction > 0 else 0
-    if drop >= len(raw_lines):
+
+    # Fast C-engine read; skip malformed rows
+    df = pd.read_csv(
+        path,
+        sep=r"\s+",
+        comment="#",
+        header=None,
+        names=fields,
+        usecols=range(len(fields)),
+        skiprows=len(header_lines) + drop,
+        engine="c",
+        on_bad_lines="skip",
+    )
+    if df.empty:
         return None
-    if drop > 0:
-        raw_lines = raw_lines[drop:]
-    arrays = [np.fromstring(l, sep=" ") for l in raw_lines]
-    data = np.vstack(arrays)
-    df = pd.DataFrame(data, columns=fields, copy=False)
     return header_lines, fields, df
 
 
@@ -163,7 +157,7 @@ def merge_colvar_files(
     header_lines, fields, data_lines_first = _read_header_and_count(files[0])
     if not header_lines:
         raise RuntimeError("Failed to read COLVAR header")
-    discard_count = int(data_lines_first * discard_fraction)
+    discard_count_first = int(data_lines_first * discard_fraction)
 
     raw_indexed: dict[int, list[str]] = {} if keep_order else {}
     raw_concat: list[str] = [] if (not keep_order and build_dataframe) else []
@@ -181,9 +175,10 @@ def merge_colvar_files(
 
     for idx, path in enumerate(files, start=1):
         # Validate header matches first file
-        hdr_curr, fields_curr, _ = _read_header_and_count(path)
+        hdr_curr, fields_curr, data_lines = _read_header_and_count(path)
         if not hdr_curr or fields_curr != fields:
             continue
+        discard_count = int(data_lines * discard_fraction)
         with open_text_file(str(path)) as handle:
             for _ in range(len(header_lines)):
                 next(handle, None)
