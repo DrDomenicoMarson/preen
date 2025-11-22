@@ -95,28 +95,29 @@ def read_colvar_dataframe(
 
     header_len = len(header_lines)
     # Fast read with pandas; skip malformed rows automatically
-    df = pd.read_table(
-        path,
-        sep=r"\s+",
-        comment="#",
-        header=None,
-        names=fields,
-        skiprows=header_len,
-        dtype=str,
-        engine="python",
-        on_bad_lines="skip",
-    )
-    if not df.empty:
-        df = df.apply(pd.to_numeric, errors="coerce")
-        df = df.dropna()
-    if df.empty:
+    rows: list[np.ndarray] = []
+    with open_text_file(str(path)) as handle:
+        for _ in range(header_len):
+            next(handle, None)
+        for line in handle:
+            if not line or line.startswith("#"):
+                continue
+            parts = line.split()
+            if len(parts) != len(fields):
+                continue
+            arr = np.fromstring(line, sep=" ")
+            if arr.size != len(fields):
+                continue
+            rows.append(arr)
+    if not rows:
         return None
-    drop = int(len(df) * discard_fraction) if discard_fraction > 0 else 0
-    if drop >= len(df):
+    data = np.vstack(rows)
+    drop = int(len(data) * discard_fraction) if discard_fraction > 0 else 0
+    if drop >= len(data):
         return None
     if drop > 0:
-        df = df.iloc[drop:]
-    df = df.reset_index(drop=True)
+        data = data[drop:]
+    df = pd.DataFrame(data, columns=fields, copy=False)
     return header_lines, fields, df
 
 
