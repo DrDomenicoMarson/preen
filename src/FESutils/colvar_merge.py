@@ -227,7 +227,7 @@ def merge_colvar_files(
     else:
         merged_lines = raw_concat
 
-    if not merged_lines:
+    if not streaming_path and not merged_lines:
         raise RuntimeError("No valid COLVAR data found to merge.")
 
     if not streaming_path:
