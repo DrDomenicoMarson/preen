@@ -125,7 +125,6 @@ def merge_colvar_files(
     base_dir: str | Path,
     basename: str = "COLVAR",
     discard_fraction: float = 0.1,
-    keep_order: bool = True,
     time_ordered: bool = False,
     output_path: str | Path | None = None,
     verbose: bool = True,
@@ -135,16 +134,14 @@ def merge_colvar_files(
     Merge COLVAR files located under base_dir.
 
     - discard_fraction: drop that fraction of valid rows from the start of each file.
-    - keep_order: append files in natural order (directories and suffix numbers).
-    - time_ordered: interleave lines by index across files (round-robin, legacy "time order").
+    - time_ordered: interleave lines by index across files (round-robin). If False, concatenate files.
     - output_path: if provided, write merged data with the first header.
     - verbose: print progress information while loading files.
     - build_dataframe: build numeric dataframe (set False to speed up merge-only CLI).
     """
     if not (0.0 <= discard_fraction <= 1.0):
         raise ValueError("discard_fraction must be between 0.0 and 1.0")
-    if time_ordered:
-        keep_order = True  # round-robin across files
+    interleave = time_ordered
 
     files = discover_colvar_files(base_dir, basename=basename)
     if not files:
@@ -159,13 +156,13 @@ def merge_colvar_files(
         raise RuntimeError("Failed to read COLVAR header")
     discard_count_first = int(data_lines_first * discard_fraction)
 
-    raw_indexed: dict[int, list[str]] = {} if keep_order else {}
-    raw_concat: list[str] = [] if (not keep_order and build_dataframe) else []
+    raw_indexed: dict[int, list[str]] = {} if interleave else {}
+    raw_concat: list[str] = [] if (not interleave and build_dataframe) else []
     valid_sources: list[Path] = []
     row_count = 0
 
     streaming_path = (
-        output_path is not None and not build_dataframe and not keep_order and not time_ordered
+        output_path is not None and not build_dataframe and not interleave and not time_ordered
     )
     out_handle = None
     if streaming_path:
@@ -184,7 +181,7 @@ def merge_colvar_files(
                 next(handle, None)
             for _ in range(discard_count):
                 next(handle, None)
-            if keep_order:
+            if interleave:
                 for line_idx, line in enumerate(handle):
                     if line.startswith("#"):
                         continue
@@ -223,7 +220,7 @@ def merge_colvar_files(
         merged_lines: list[str] = []
         merged_df = pd.DataFrame(columns=fields)
         time_col = "time" if "time" in fields else None
-    elif keep_order:
+    elif interleave:
         merged_lines: list[str] = []
         for idx in sorted(raw_indexed.keys()):
             merged_lines.extend(raw_indexed[idx])
@@ -250,9 +247,6 @@ def merge_colvar_files(
         time_col = merged_df.columns[0]
 
     if build_dataframe and time_ordered and time_col is not None:
-        merged_df = merged_df.reset_index(drop=True)
-
-    if build_dataframe and keep_order and not time_ordered:
         merged_df = merged_df.reset_index(drop=True)
 
     if output_path and not streaming_path:

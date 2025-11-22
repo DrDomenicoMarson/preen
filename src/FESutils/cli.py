@@ -39,13 +39,7 @@ def _add_colvar_merge(subparsers):
     parser.add_argument(
         "--time-ordered",
         action="store_true",
-        help="Sort merged data by time.",
-    )
-    parser.add_argument(
-        "--no-keep-order",
-        dest="keep_order",
-        action="store_false",
-        help="Do not preserve natural file order (only relevant when not time-ordering).",
+        help="Interleave lines by index across files (round-robin) instead of concatenating.",
     )
     parser.add_argument(
         "--output",
@@ -57,7 +51,7 @@ def _add_colvar_merge(subparsers):
         action="store_true",
         help="Suppress progress output.",
     )
-    parser.set_defaults(func=_handle_colvar_merge, keep_order=True)
+    parser.set_defaults(func=_handle_colvar_merge)
 
 
 def _add_colvar_plot(subparsers):
@@ -148,7 +142,6 @@ def _handle_colvar_merge(args):
         base_dir=args.base_dir,
         basename=args.basename,
         discard_fraction=args.discard_fraction,
-        keep_order=args.keep_order,
         time_ordered=args.time_ordered,
         output_path=args.output,
         verbose=not args.quiet,
