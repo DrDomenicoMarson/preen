@@ -136,7 +136,7 @@ def merge_colvar_files(
 
     - discard_fraction: drop that fraction of valid rows from the start of each file.
     - keep_order: append files in natural order (directories and suffix numbers).
-    - time_ordered: sort merged data by the time column (if present).
+    - time_ordered: interleave lines by index across files (round-robin, legacy "time order").
     - output_path: if provided, write merged data with the first header.
     - verbose: print progress information while loading files.
     - build_dataframe: build numeric dataframe (set False to speed up merge-only CLI).
@@ -144,7 +144,7 @@ def merge_colvar_files(
     if not (0.0 <= discard_fraction <= 1.0):
         raise ValueError("discard_fraction must be between 0.0 and 1.0")
     if time_ordered:
-        build_dataframe = True
+        keep_order = True  # round-robin across files
 
     files = discover_colvar_files(base_dir, basename=basename)
     if not files:
@@ -246,11 +246,11 @@ def merge_colvar_files(
         merged_df = pd.DataFrame(columns=fields)
         time_col = "time" if "time" in fields else None
 
-    if time_ordered and time_col is None:
+    if time_ordered and time_col is None and build_dataframe:
         time_col = merged_df.columns[0]
 
     if build_dataframe and time_ordered and time_col is not None:
-        merged_df = merged_df.sort_values(time_col, kind="mergesort", ignore_index=True)
+        merged_df = merged_df.reset_index(drop=True)
 
     if build_dataframe and keep_order and not time_ordered:
         merged_df = merged_df.reset_index(drop=True)
