@@ -97,7 +97,7 @@ def read_colvar_dataframe(
     # Fast read with pandas; skip malformed rows automatically
     df = pd.read_table(
         path,
-        delim_whitespace=True,
+        sep=r"\s+",
         comment="#",
         header=None,
         names=fields,
@@ -187,9 +187,11 @@ def merge_colvar_files(
         merged_df = merged_df.reset_index(drop=True)
 
     if output_path:
+        if verbose:
+            print("Writing merged COLVAR...", end="\r", flush=True)
         _write_colvar(Path(output_path), header_lines, merged_df)
         if verbose:
-            print(f"Wrote merged COLVAR to {output_path}")
+            print(f"Wrote merged COLVAR to {output_path}          ")
 
     return MergeResult(
         dataframe=merged_df,

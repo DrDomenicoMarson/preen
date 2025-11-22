@@ -102,12 +102,71 @@ def plot_colvar_timeseries(
     if not aggregates:
         raise FileNotFoundError(f"No valid COLVAR files found under {base_dir}")
 
+    if per_run and verbose:
+        total_plots = len(aggregates)
+        print(f"Plotting per-run: 0/{total_plots}", end="\r", flush=True)
+        for i, (path, time_col, cols_to_plot, df) in enumerate(aggregates, start=1):
+            out = path.with_suffix("")  # drop .gz if present
+            out_path = Path(f"{out}_timeseries.png")
+            _plot_single(
+                path.name,
+                time_col,
+                cols_to_plot,
+                [df],
+                out_path,
+                discard_fraction=discard_fraction,
+                marker=marker,
+                marker_size=marker_size,
+            )
+            outputs[path.name] = out_path
+            if include_hist:
+                hist_path = Path(f"{out}_hist.png")
+                _plot_histograms(
+                    path.name,
+                    cols_to_plot,
+                    [df],
+                    hist_path,
+                    discard_fraction=discard_fraction,
+                    marker_size=marker_size,
+                )
+                outputs[f"{path.name}_hist"] = hist_path
+            print(f"Plotting per-run: {i}/{total_plots}", end="\r", flush=True)
+        print(f"Plotting per-run: {total_plots}/{total_plots} (done)          ")
+    elif per_run:
+        for (path, time_col, cols_to_plot, df) in aggregates:
+            out = path.with_suffix("")
+            out_path = Path(f"{out}_timeseries.png")
+            _plot_single(
+                path.name,
+                time_col,
+                cols_to_plot,
+                [df],
+                out_path,
+                discard_fraction=discard_fraction,
+                marker=marker,
+                marker_size=marker_size,
+            )
+            outputs[path.name] = out_path
+            if include_hist:
+                hist_path = Path(f"{out}_hist.png")
+                _plot_histograms(
+                    path.name,
+                    cols_to_plot,
+                    [df],
+                    hist_path,
+                    discard_fraction=discard_fraction,
+                    marker_size=marker_size,
+                )
+                outputs[f"{path.name}_hist"] = hist_path
+
     if output_path:
         time_col = aggregates[0][1]
         cols_to_plot = aggregates[0][2]
         dfs = [info[3] for info in aggregates]
         labels = [info[0].name for info in aggregates]
         out_path = Path(output_path)
+        if verbose:
+            print("Plotting aggregate...", end="\r", flush=True)
         _plot_single(
             labels,
             time_col,
@@ -131,7 +190,7 @@ def plot_colvar_timeseries(
             )
             outputs["aggregate_hist"] = hist_out
         if verbose:
-            print(f"Wrote aggregate plot(s) to {out_path}")
+            print(f"Wrote aggregate plot(s) to {out_path}          ")
 
     return outputs
 
