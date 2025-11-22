@@ -62,16 +62,10 @@ class MergeResult:
     time_column: str | None
 
 
-def read_colvar_dataframe(
-    path: Path,
-    expected_fields: Sequence[str] | None = None,
-    discard_fraction: float = 0.0,
-) -> tuple[list[str], list[str], pd.DataFrame] | None:
+def _read_header_and_count(path: Path) -> tuple[list[str], list[str], int]:
     """
-    Read a single COLVAR file into a dataframe, discarding malformed rows.
-    Returns (header_lines, fields, dataframe) or None if fields mismatch/empty.
+    Read header lines, extract fields, and count data lines (after header).
     """
-    # Parse header to get fields and header length
     header_lines: list[str] = []
     with open_text_file(str(path)) as handle:
         while True:
@@ -83,19 +77,30 @@ def read_colvar_dataframe(
                 handle.seek(pos)
                 break
             header_lines.append(line)
+        data_lines = sum(1 for _ in handle)
+    if not header_lines or not header_lines[0].startswith("#! FIELDS"):
+        return [], [], 0
+    fields = header_lines[0].split()[2:]
+    return header_lines, fields, data_lines
 
+
+def read_colvar_dataframe(
+    path: Path,
+    expected_fields: Sequence[str] | None = None,
+    discard_fraction: float = 0.0,
+) -> tuple[list[str], list[str], pd.DataFrame] | None:
+    """
+    Read a single COLVAR file into a dataframe, discarding malformed rows.
+    Returns (header_lines, fields, dataframe) or None if fields mismatch/empty.
+    """
+    header_lines, fields, data_lines_first = _read_header_and_count(path)
     if not header_lines:
         return None
-    first = header_lines[0]
-    if not first.startswith("#! FIELDS"):
-        return None
-    fields = first.split()[2:]
     if expected_fields is not None and list(expected_fields) != fields:
         return None
 
     header_len = len(header_lines)
-    # Fast read with pandas; skip malformed rows automatically
-    rows: list[np.ndarray] = []
+    raw_lines: list[str] = []
     with open_text_file(str(path)) as handle:
         for _ in range(header_len):
             next(handle, None)
@@ -105,18 +110,18 @@ def read_colvar_dataframe(
             parts = line.split()
             if len(parts) != len(fields):
                 continue
-            arr = np.fromstring(line, sep=" ")
-            if arr.size != len(fields):
-                continue
-            rows.append(arr)
-    if not rows:
+            if not line.endswith("\n"):
+                line = line + "\n"
+            raw_lines.append(line)
+    if not raw_lines:
         return None
-    data = np.vstack(rows)
-    drop = int(len(data) * discard_fraction) if discard_fraction > 0 else 0
-    if drop >= len(data):
+    drop = int(len(raw_lines) * discard_fraction) if discard_fraction > 0 else 0
+    if drop >= len(raw_lines):
         return None
     if drop > 0:
-        data = data[drop:]
+        raw_lines = raw_lines[drop:]
+    arrays = [np.fromstring(l, sep=" ") for l in raw_lines]
+    data = np.vstack(arrays)
     df = pd.DataFrame(data, columns=fields, copy=False)
     return header_lines, fields, df
 
@@ -150,21 +155,45 @@ def merge_colvar_files(
         print(f"Found {total_files} COLVAR file(s) matching '{basename}'")
         print(f"Loading COLVAR files: 0/{total_files}", end="\r", flush=True)
 
-    merged_frames: list[pd.DataFrame] = []
-    header_lines: list[str] | None = None
-    fields: Sequence[str] | None = None
+    header_lines, fields, data_lines_first = _read_header_and_count(files[0])
+    if not header_lines:
+        raise RuntimeError("Failed to read COLVAR header")
+    discard_count = int(data_lines_first * discard_fraction)
+
+    raw_indexed: dict[int, list[str]] = {} if keep_order else {}
+    raw_concat: list[str] = [] if not keep_order else []
     valid_sources: list[Path] = []
 
     for idx, path in enumerate(files, start=1):
-        result = read_colvar_dataframe(path, expected_fields=fields, discard_fraction=discard_fraction)
-        if result is None:
+        # Validate header matches first file
+        hdr_curr, fields_curr, _ = _read_header_and_count(path)
+        if not hdr_curr or fields_curr != fields:
             continue
-        hdr, flds, df = result
-        if fields is None:
-            fields = flds
-        if header_lines is None:
-            header_lines = hdr
-        merged_frames.append(df)
+        with open_text_file(str(path)) as handle:
+            for _ in range(len(header_lines)):
+                next(handle, None)
+            for _ in range(discard_count):
+                next(handle, None)
+            if keep_order:
+                for line_idx, line in enumerate(handle):
+                    if line.startswith("#"):
+                        continue
+                    parts = line.split()
+                    if len(parts) != len(fields):
+                        continue
+                    if not line.endswith("\n"):
+                        line += "\n"
+                    raw_indexed.setdefault(line_idx, []).append(line)
+            else:
+                for line in handle:
+                    if line.startswith("#"):
+                        continue
+                    parts = line.split()
+                    if len(parts) != len(fields):
+                        continue
+                    if not line.endswith("\n"):
+                        line += "\n"
+                    raw_concat.append(line)
         valid_sources.append(path)
         if verbose:
             print(f"Loading COLVAR files: {idx}/{total_files}", end="\r", flush=True)
@@ -172,10 +201,19 @@ def merge_colvar_files(
     if verbose:
         print(f"Loading COLVAR files: {len(valid_sources)}/{total_files} (done)          ")
 
-    if not merged_frames or fields is None or header_lines is None:
+    if keep_order:
+        merged_lines: list[str] = []
+        for idx in sorted(raw_indexed.keys()):
+            merged_lines.extend(raw_indexed[idx])
+    else:
+        merged_lines = raw_concat
+
+    if not merged_lines:
         raise RuntimeError("No valid COLVAR data found to merge.")
 
-    merged_df = pd.concat(merged_frames, ignore_index=True, copy=False)
+    arrays = [np.fromstring(l, sep=" ") for l in merged_lines]
+    merged_data = np.vstack(arrays)
+    merged_df = pd.DataFrame(merged_data, columns=fields, copy=False)
 
     time_col = "time" if "time" in merged_df.columns else None
     if time_ordered and time_col is None:
