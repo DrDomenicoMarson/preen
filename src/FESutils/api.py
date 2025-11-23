@@ -15,11 +15,13 @@ from FESutils.kernel_eval import (
 )
 from FESutils.fes_output import OutputOptions, SampleStats, write_standard_output, write_block_output
 from FESutils.fes_plot import PlotManager
+from numba import set_num_threads
 
 def calculate_fes(config: FESConfig, merge_result=None):
     """
     Calculate FES from COLVAR data (reweighting).
     """
+    set_num_threads(config.num_threads)
     if config.sigma is None:
         raise ValueError(f"{ERROR_PREFIX} sigma is required for reweighting")
     if config.cv_spec is None:
@@ -380,6 +382,7 @@ def calculate_fes_from_state(config: FESConfig):
     """
     Calculate FES from STATE file (sum of kernels).
     """
+    set_num_threads(config.num_threads)
     # 1. Load Data
     try:
         with open_text_file(config.filename) as f:

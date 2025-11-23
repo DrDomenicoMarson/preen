@@ -53,6 +53,12 @@ def _add_colvar_merge(subparsers):
         action="store_true",
         help="Suppress progress output.",
     )
+    parser.add_argument(
+        "--num-threads",
+        type=int,
+        default=None,
+        help="Threads for numba (default: min(16, available cores)).",
+    )
     parser.set_defaults(func=_handle_colvar_merge)
 
 
@@ -157,6 +163,12 @@ def _add_colvar_reweight(subparsers):
         "--fmt",
         default="% 12.6f",
         help="Output format for numeric values.",
+    )
+    parser.add_argument(
+        "--num-threads",
+        type=int,
+        default=None,
+        help="Threads for numba (default: min(16, available cores)).",
     )
     parser.add_argument(
         "--quiet",
@@ -340,6 +352,7 @@ def _handle_colvar_reweight(args):
         backup=False,
         plot=args.plot,
         fmt=args.fmt,
+        num_threads=args.num_threads,
     )
     calculate_fes(config, merge_result=merge_result)
     out_path = Path(args.output).resolve()

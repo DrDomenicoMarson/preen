@@ -1,4 +1,5 @@
 import math
+import os
 from dataclasses import dataclass
 from FESutils.constants import KB_KJ_MOL, normalize_energy_unit
 
@@ -30,6 +31,7 @@ class FESConfig:
     backup: bool = False
     input_energy_unit: str = "kJ/mol"
     output_energy_unit: str = "kJ/mol"
+    num_threads: int | None = None
 
     def __post_init__(self):
         if self.kbt is None:
@@ -52,6 +54,12 @@ class FESConfig:
         object.__setattr__(
             self, "output_energy_unit", normalize_energy_unit(self.output_energy_unit)
         )
+        threads = self.num_threads
+        if threads is None:
+            threads = max(1, min(16, os.cpu_count() or 1))
+        elif threads <= 0:
+            raise ValueError("num_threads must be positive")
+        object.__setattr__(self, "num_threads", int(threads))
 
     @property
     def dimension(self) -> int:
