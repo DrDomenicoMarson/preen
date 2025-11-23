@@ -80,9 +80,11 @@ def load_colvar_data(config: FESConfig, merge_result=None) -> ColvarData:
     else:
         if not isinstance(merge_result, MergeResult):
             raise TypeError("merge_result must be a MergeResult or None")
-        fields = list(merge_result.fields)
-        cv_infos = _resolve_cv_infos(fields, config.cv_spec)
-        bias_info = _resolve_bias_info(fields, config.bias_spec)
+        # merge_result.fields are already stripped (no '#!' or 'FIELDS'), so pad for resolver helpers
+        stripped_fields = list(merge_result.fields)
+        padded_fields = ["", ""] + stripped_fields
+        cv_infos = _resolve_cv_infos(padded_fields, config.cv_spec)
+        bias_info = _resolve_bias_info(padded_fields, config.bias_spec)
         header_tail = "".join(merge_result.header_lines[1:]) if len(merge_result.header_lines) > 1 else ""
         header_lines = _parse_header_metadata(io.StringIO(header_tail), cv_infos, config.calc_der)
         metadata = ColvarMetadata(
@@ -92,7 +94,7 @@ def load_colvar_data(config: FESConfig, merge_result=None) -> ColvarData:
         if config.skiprows > 0:
             data = data.iloc[config.skiprows:]
         # Ensure column ordering matches fields and drop any extra
-        data = data[fields]
+        data = data[stripped_fields]
 
     if data.isnull().values.any():
         raise ValueError(

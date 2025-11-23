@@ -10,7 +10,7 @@ import argparse
 import sys
 from pathlib import Path
 
-from .colvar_merge import merge_colvar_files
+from .colvar_merge import merge_colvar_files, discover_colvar_files, _read_header_and_count
 from .colvar_plot import plot_colvar_timeseries
 from .api import calculate_fes
 from .fes_config import FESConfig
@@ -290,6 +290,20 @@ def _handle_colvar_reweight(args):
     columns = _parse_values(args.columns, str) if args.columns is not None else None
     if columns is None:
         raise ValueError("At least one column must be provided via --columns")
+
+    # Quick header validation before heavy work
+    files = discover_colvar_files(args.base_dir, basename=args.basename)
+    if not files:
+        raise FileNotFoundError(f"No COLVAR files matching '{args.basename}' found in {args.base_dir}")
+    header_lines_first, fields_first, _ = _read_header_and_count(files[0])
+    if not header_lines_first:
+        raise RuntimeError(f"Failed to read header from {files[0]}")
+    missing = [c for c in columns if c not in fields_first]
+    if missing:
+        available_str = ", ".join(fields_first)
+        raise ValueError(
+            f"Requested columns not found: {', '.join(missing)}. Available columns: {available_str}"
+        )
 
     verbose = not args.quiet
     merge_result = merge_colvar_files(
