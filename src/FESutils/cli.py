@@ -57,8 +57,39 @@ def _add_colvar_merge(subparsers):
 
 
 def _parse_tuple(value: str, cast):
-    parts = [p.strip() for p in value.split(",") if p.strip()]
+    parts = [p.strip() for p in value.replace(",", " ").split() if p.strip()]
     return tuple(cast(p) for p in parts)
+
+
+def _parse_values(values, cast=str):
+    """
+    Normalize mixed comma/space inputs from argparse.
+    Accepts list from nargs or a single comma-separated string.
+    """
+    if values is None:
+        return None
+    if isinstance(values, str):
+        raw_items = values
+    elif isinstance(values, (list, tuple)) and len(values) == 1:
+        raw_items = values[0]
+    else:
+        raw_items = values
+    items: list[str] = []
+    if isinstance(raw_items, str):
+        for token in raw_items.replace(",", " ").split():
+            if token:
+                items.append(token)
+    else:
+        for token in raw_items:
+            if token is None:
+                continue
+            if isinstance(token, str) and "," in token and len(raw_items) == 1:
+                for sub in token.replace(",", " ").split():
+                    if sub:
+                        items.append(sub)
+            else:
+                items.append(str(token))
+    return tuple(cast(item) for item in items)
 
 
 def _add_colvar_reweight(subparsers):
@@ -83,7 +114,7 @@ def _add_colvar_reweight(subparsers):
         "--columns",
         nargs="+",
         required=True,
-        help="CV column names to use (1 or 2).",
+        help="CV column names to use (1 or 2). Comma or space separated.",
     )
     parser.add_argument(
         "--bias-spec",
@@ -93,12 +124,12 @@ def _add_colvar_reweight(subparsers):
     parser.add_argument(
         "--sigma",
         required=True,
-        help="Comma-separated sigma values (1 or 2).",
+        help="Sigma values (1 or 2), comma or space separated.",
     )
     parser.add_argument(
         "--grid-bin",
         default=None,
-        help="Comma-separated grid bins (default 100 or 50,50 for 2D).",
+        help="Grid bins (default 100 or 50 50 for 2D), comma or space separated.",
     )
     parser.add_argument(
         "--temp",
@@ -152,7 +183,7 @@ def _add_colvar_plot(subparsers):
     parser.add_argument(
         "--columns",
         nargs="+",
-        help="Specific columns to plot (default: all except time).",
+        help="Specific columns to plot (comma or space separated; default: all except time).",
     )
     parser.add_argument(
         "--marker",
@@ -195,12 +226,13 @@ def _add_colvar_plot(subparsers):
 
 
 def _handle_colvar_plot(args):
+    columns = _parse_values(args.columns, str) if args.columns is not None else None
     output_path = args.output if args.output else None
     outputs = plot_colvar_timeseries(
         base_dir=args.base_dir,
         basename=args.basename,
         discard_fraction=args.discard_fraction,
-        columns=args.columns,
+        columns=columns,
         time_column=args.time_column,
         output_path=output_path,
         per_run=args.per_run,
@@ -242,14 +274,18 @@ def _handle_colvar_merge(args):
 
 def _handle_colvar_reweight(args):
     # Parse sigma and grid
-    sigma_tuple = _parse_tuple(args.sigma, float)
+    sigma_tuple = _parse_values(args.sigma, float)
     if len(sigma_tuple) not in (1, 2):
         raise ValueError("sigma must have 1 or 2 values")
     grid_bin_tuple = None
     if args.grid_bin:
-        grid_bin_tuple = _parse_tuple(args.grid_bin, int)
+        grid_bin_tuple = _parse_values(args.grid_bin, int)
     else:
         grid_bin_tuple = (100,) if len(sigma_tuple) == 1 else (50, 50)
+
+    columns = _parse_values(args.columns, str) if args.columns is not None else None
+    if columns is None:
+        raise ValueError("At least one column must be provided via --columns")
 
     verbose = not args.quiet
     merge_result = merge_colvar_files(
@@ -261,6 +297,18 @@ def _handle_colvar_reweight(args):
         verbose=verbose,
         build_dataframe=True,
     )
+    available_fields = list(merge_result.fields)
+    missing = [c for c in args.columns if c not in available_fields]
+    if missing:
+        available_str = ", ".join(available_fields)
+        raise ValueError(
+            f"Requested columns not found: {', '.join(missing)}. Available columns: {available_str}"
+        )
+    if verbose:
+        cv_display = ", ".join(columns)
+        bias_display = args.bias_spec
+        print(f"Using CVs: {cv_display}")
+        print(f"Using bias spec: {bias_display}")
 
     config = FESConfig(
         filename="MERGED_IN_MEMORY",
@@ -269,7 +317,7 @@ def _handle_colvar_reweight(args):
         temp=None if args.kbt is not None else args.temp,
         grid_bin=grid_bin_tuple,
         sigma=sigma_tuple,
-        cv_spec=tuple(args.columns),
+        cv_spec=tuple(columns),
         bias_spec=args.bias_spec,
         backup=False,
         plot=args.plot,

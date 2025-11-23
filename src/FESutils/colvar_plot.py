@@ -21,7 +21,11 @@ def _resolve_columns(fields: Sequence[str], columns: Sequence[str] | None) -> li
         return list(fields[1:])  # default: all except time column
     missing = [c for c in columns if c not in fields]
     if missing:
-        raise ValueError(f"Columns not found in COLVAR header: {', '.join(missing)}")
+        available = ", ".join(fields)
+        raise ValueError(
+            f"Columns not found in COLVAR header: {', '.join(missing)}. "
+            f"Available columns: {available}"
+        )
     return list(columns)
 
 
