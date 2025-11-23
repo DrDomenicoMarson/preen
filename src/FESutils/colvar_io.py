@@ -104,7 +104,10 @@ def load_colvar_data(config: FESConfig, merge_result=None) -> ColvarData:
         data = data.iloc[::-1]
     required_cols = [info.column for info in metadata.cvs] + metadata.bias.columns
     required_cols = sorted(set(required_cols))
-    col_names = [fields[idx] for idx in required_cols] if merge_result is not None else required_cols
+    if merge_result is not None:
+        col_names = [stripped_fields[idx] for idx in required_cols]
+    else:
+        col_names = required_cols
     sub_data = data[col_names]
     col_map = {col: idx for idx, col in enumerate(required_cols)}
     cv_arrays = []
