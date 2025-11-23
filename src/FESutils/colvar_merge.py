@@ -160,6 +160,9 @@ def merge_colvar_files(
     raw_concat: list[str] = [] if (not interleave and build_dataframe) else []
     valid_sources: list[Path] = []
     row_count = 0
+    total_seen = 0
+    total_discarded = 0
+    total_malformed = 0
 
     streaming_path = (
         output_path is not None and not build_dataframe and not interleave and not time_ordered
@@ -180,13 +183,16 @@ def merge_colvar_files(
             for _ in range(len(header_lines)):
                 next(handle, None)
             for _ in range(discard_count):
-                next(handle, None)
+                if next(handle, None) is not None:
+                    total_discarded += 1
             if interleave:
                 for line_idx, line in enumerate(handle):
+                    total_seen += 1
                     if line.startswith("#"):
                         continue
                     parts = line.split()
                     if len(parts) != len(fields):
+                        total_malformed += 1
                         continue
                     if not line.endswith("\n"):
                         line += "\n"
@@ -194,10 +200,12 @@ def merge_colvar_files(
                     row_count += 1
             else:
                 for line in handle:
+                    total_seen += 1
                     if line.startswith("#"):
                         continue
                     parts = line.split()
                     if len(parts) != len(fields):
+                        total_malformed += 1
                         continue
                     if not line.endswith("\n"):
                         line += "\n"
@@ -212,6 +220,10 @@ def merge_colvar_files(
 
     if verbose:
         print(f"Loading COLVAR files: {len(valid_sources)}/{total_files} (done)          ")
+        print(
+            f"Lines read: {total_seen + total_discarded}, kept: {row_count}, "
+            f"discarded (fractional skip): {total_discarded}, malformed: {total_malformed}"
+        )
 
     if streaming_path:
         if out_handle is not None:
