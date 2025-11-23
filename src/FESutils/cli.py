@@ -287,6 +287,10 @@ def _handle_colvar_reweight(args):
     if columns is None:
         raise ValueError("At least one column must be provided via --columns")
 
+    columns = _parse_values(args.columns, str) if args.columns is not None else None
+    if columns is None:
+        raise ValueError("At least one column must be provided via --columns")
+
     verbose = not args.quiet
     merge_result = merge_colvar_files(
         base_dir=args.base_dir,
@@ -298,7 +302,7 @@ def _handle_colvar_reweight(args):
         build_dataframe=True,
     )
     available_fields = list(merge_result.fields)
-    missing = [c for c in args.columns if c not in available_fields]
+    missing = [c for c in columns if c not in available_fields]
     if missing:
         available_str = ", ".join(available_fields)
         raise ValueError(
