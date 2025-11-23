@@ -12,6 +12,8 @@ from pathlib import Path
 
 from .colvar_merge import merge_colvar_files
 from .colvar_plot import plot_colvar_timeseries
+from .api import calculate_fes
+from .fes_config import FESConfig
 
 
 def _add_colvar_merge(subparsers):
@@ -52,6 +54,85 @@ def _add_colvar_merge(subparsers):
         help="Suppress progress output.",
     )
     parser.set_defaults(func=_handle_colvar_merge)
+
+
+def _parse_tuple(value: str, cast):
+    parts = [p.strip() for p in value.split(",") if p.strip()]
+    return tuple(cast(p) for p in parts)
+
+
+def _add_colvar_reweight(subparsers):
+    parser = subparsers.add_parser(
+        "reweight",
+        help="Reweight COLVAR data to compute FES (no merged COLVAR written).",
+    )
+    parser.add_argument("--base-dir", default=".", help="Base directory to scan.")
+    parser.add_argument("--basename", default="COLVAR", help="Base file name to match (default: COLVAR).")
+    parser.add_argument(
+        "--discard-fraction",
+        type=float,
+        default=0.1,
+        help="Fraction of each file to discard from the start (0.0-1.0). Default: 0.1.",
+    )
+    parser.add_argument(
+        "--time-ordered",
+        action="store_true",
+        help="Interleave lines by index across files (round-robin) instead of concatenating.",
+    )
+    parser.add_argument(
+        "--columns",
+        nargs="+",
+        required=True,
+        help="CV column names to use (1 or 2).",
+    )
+    parser.add_argument(
+        "--bias-spec",
+        default=".bias",
+        help="Bias specification (name or column list) default '.bias'.",
+    )
+    parser.add_argument(
+        "--sigma",
+        required=True,
+        help="Comma-separated sigma values (1 or 2).",
+    )
+    parser.add_argument(
+        "--grid-bin",
+        default=None,
+        help="Comma-separated grid bins (default 100 or 50,50 for 2D).",
+    )
+    parser.add_argument(
+        "--temp",
+        type=float,
+        default=300.0,
+        help="Temperature in K (default 300).",
+    )
+    parser.add_argument(
+        "--kbt",
+        type=float,
+        default=None,
+        help="Override kBT in kJ/mol (if provided, temp is ignored).",
+    )
+    parser.add_argument(
+        "--output",
+        default="fes-rew.dat",
+        help="Output FES file (default: fes-rew.dat).",
+    )
+    parser.add_argument(
+        "--plot",
+        action="store_true",
+        help="Enable plotting of the resulting FES.",
+    )
+    parser.add_argument(
+        "--fmt",
+        default="% 12.6f",
+        help="Output format for numeric values.",
+    )
+    parser.add_argument(
+        "--quiet",
+        action="store_true",
+        help="Suppress progress output.",
+    )
+    parser.set_defaults(func=_handle_colvar_reweight)
 
 
 def _add_colvar_plot(subparsers):
@@ -159,6 +240,58 @@ def _handle_colvar_merge(args):
     return 0
 
 
+def _handle_colvar_reweight(args):
+    # Parse sigma and grid
+    sigma_tuple = _parse_tuple(args.sigma, float)
+    if len(sigma_tuple) not in (1, 2):
+        raise ValueError("sigma must have 1 or 2 values")
+    grid_bin_tuple = None
+    if args.grid_bin:
+        grid_bin_tuple = _parse_tuple(args.grid_bin, int)
+    else:
+        grid_bin_tuple = (100,) if len(sigma_tuple) == 1 else (50, 50)
+
+    verbose = not args.quiet
+    merge_result = merge_colvar_files(
+        base_dir=args.base_dir,
+        basename=args.basename,
+        discard_fraction=args.discard_fraction,
+        time_ordered=args.time_ordered,
+        output_path=None,
+        verbose=verbose,
+        build_dataframe=True,
+    )
+
+    config = FESConfig(
+        filename="MERGED_IN_MEMORY",
+        outfile=args.output,
+        kbt=args.kbt if args.kbt is not None else None,
+        temp=None if args.kbt is not None else args.temp,
+        grid_bin=grid_bin_tuple,
+        sigma=sigma_tuple,
+        cv_spec=tuple(args.columns),
+        bias_spec=args.bias_spec,
+        backup=False,
+        plot=args.plot,
+        fmt=args.fmt,
+    )
+    calculate_fes(config, merge_result=merge_result)
+    out_path = Path(args.output).resolve()
+    try:
+        display_path = out_path.relative_to(Path.cwd())
+    except ValueError:
+        display_path = out_path
+    print(f"Computed FES to: {display_path}")
+    if args.plot:
+        png_path = out_path.with_suffix(".png")
+        try:
+            png_display = png_path.relative_to(Path.cwd())
+        except ValueError:
+            png_display = png_path
+        print(f"Plot saved to: {png_display}")
+    return 0
+
+
 def main(argv: list[str] | None = None) -> int:
     parser = argparse.ArgumentParser(prog="preen", description="Preen CLI utilities")
     subparsers = parser.add_subparsers(dest="command")
@@ -167,6 +300,7 @@ def main(argv: list[str] | None = None) -> int:
     colvar_subparsers = colvar_parser.add_subparsers(dest="colvar_command")
     _add_colvar_merge(colvar_subparsers)
     _add_colvar_plot(colvar_subparsers)
+    _add_colvar_reweight(colvar_subparsers)
 
     args = parser.parse_args(argv)
     if hasattr(args, "func"):
