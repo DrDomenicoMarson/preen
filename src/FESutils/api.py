@@ -689,3 +689,7 @@ def calculate_fes_from_state(config: FESStateConfig):
             print(f"   plotted to {png_name}")
 
     print("Done.")
+
+# Delegate STATE handling to the dedicated module (overrides legacy in-file implementation)
+from FESutils.state_api import calculate_fes_from_state as _state_calc_fes  # type: ignore
+calculate_fes_from_state = _state_calc_fes
