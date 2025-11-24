@@ -13,7 +13,8 @@ from pathlib import Path
 from .colvar_merge import merge_colvar_files, discover_colvar_files, _read_header_and_count
 from .colvar_plot import plot_colvar_timeseries
 from .colvar_api import calculate_fes
-from .fes_config import FESConfig
+from .state_api import calculate_fes_from_state
+from .fes_config import FESConfig, FESStateConfig
 
 
 def _add_colvar_merge(subparsers):
@@ -164,9 +165,10 @@ def _add_colvar_reweight(subparsers):
         help="Output FES file (default: fes-rew.dat).",
     )
     parser.add_argument(
-        "--plot",
-        action="store_true",
-        help="Enable plotting of the resulting FES.",
+        "--no-plot",
+        dest="plot",
+        action="store_false",
+        help="Disable plotting of the resulting FES (default: plot enabled).",
     )
     parser.add_argument(
         "--fmt",
@@ -184,7 +186,81 @@ def _add_colvar_reweight(subparsers):
         action="store_true",
         help="Suppress progress output.",
     )
-    parser.set_defaults(func=_handle_colvar_reweight)
+    parser.set_defaults(func=_handle_colvar_reweight, plot=True)
+
+
+def _add_fes_from_state(subparsers):
+    parser = subparsers.add_parser(
+        "fromstate",
+        help="Compute FES from a STATE (kernel) file.",
+    )
+    parser.add_argument("filename", help="STATE/KERNELS file path.")
+    parser.add_argument(
+        "--outfile",
+        default="fes-state.dat",
+        help="Output FES file (default: fes-state.dat).",
+    )
+    parser.add_argument(
+        "--temp",
+        type=float,
+        default=300.0,
+        help="Temperature in K (default 300). Ignored if --kbt is provided.",
+    )
+    parser.add_argument(
+        "--kbt",
+        type=float,
+        default=None,
+        help="Override kBT in kJ/mol (if provided, temp is ignored).",
+    )
+    parser.add_argument(
+        "--grid-bin",
+        default=None,
+        help="Grid bins (default 100 100), comma or space separated.",
+    )
+    parser.add_argument(
+        "--grid-min",
+        default=None,
+        help="Grid minimum values (optional), comma or space separated.",
+    )
+    parser.add_argument(
+        "--grid-max",
+        default=None,
+        help="Grid maximum values (optional), comma or space separated.",
+    )
+    parser.add_argument(
+        "--no-mintozero",
+        dest="mintozero",
+        action="store_false",
+        help="Do not shift FES minimum to zero.",
+    )
+    parser.add_argument(
+        "--der",
+        dest="calc_der",
+        action="store_true",
+        help="Compute derivatives if supported (disabled by default).",
+    )
+    parser.add_argument(
+        "--plot",
+        action="store_true",
+        help="Enable plotting of the resulting FES.",
+    )
+    parser.add_argument(
+        "--backup",
+        action="store_true",
+        help="Enable PLUMED-style backup when writing output.",
+    )
+    parser.add_argument(
+        "--fmt",
+        default="% 12.6f",
+        help="Output format for numeric values.",
+    )
+    parser.add_argument(
+        "--num-threads",
+        type=int,
+        default=None,
+        help="Threads for numba (default: min(16, available cores)).",
+    )
+    parser.set_defaults(func=_handle_fes_from_state, mintozero=True, calc_der=False)
 
 
 def _add_colvar_plot(subparsers):
@@ -378,6 +454,43 @@ def _handle_colvar_reweight(args):
     return 0
 
 
+def _handle_fes_from_state(args):
+    grid_bin_tuple = _parse_values(args.grid_bin, int) if args.grid_bin else (100, 100)
+    grid_min_tuple = _parse_values(args.grid_min, float) if args.grid_min else None
+    grid_max_tuple = _parse_values(args.grid_max, float) if args.grid_max else None
+
+    config = FESStateConfig(
+        filename=args.filename,
+        outfile=args.outfile,
+        kbt=args.kbt if args.kbt is not None else None,
+        temp=None if args.kbt is not None else args.temp,
+        grid_bin=grid_bin_tuple,
+        grid_min=grid_min_tuple,
+        grid_max=grid_max_tuple,
+        mintozero=args.mintozero,
+        calc_der=args.calc_der,
+        plot=args.plot,
+        backup=args.backup,
+        fmt=args.fmt,
+        num_threads=args.num_threads,
+    )
+    calculate_fes_from_state(config)
+    out_path = Path(args.outfile).resolve()
+    try:
+        display_path = out_path.relative_to(Path.cwd())
+    except ValueError:
+        display_path = out_path
+    print(f"Computed FES from STATE to: {display_path}")
+    if args.plot:
+        png_path = out_path.with_suffix(".png")
+        try:
+            png_display = png_path.relative_to(Path.cwd())
+        except ValueError:
+            png_display = png_path
+        print(f"Plot saved to: {png_display}")
+    return 0
+
+
 def main(argv: list[str] | None = None) -> int:
     parser = argparse.ArgumentParser(prog="preen", description="Preen CLI utilities")
     subparsers = parser.add_subparsers(dest="command")
@@ -387,6 +500,10 @@ def main(argv: list[str] | None = None) -> int:
     _add_colvar_merge(colvar_subparsers)
     _add_colvar_plot(colvar_subparsers)
     _add_colvar_reweight(colvar_subparsers)
+
+    fes_parser = subparsers.add_parser("fes", help="FES utilities")
+    fes_subparsers = fes_parser.add_subparsers(dest="fes_command")
+    _add_fes_from_state(fes_subparsers)
 
     args = parser.parse_args(argv)
     if hasattr(args, "func"):
