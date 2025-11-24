@@ -46,7 +46,7 @@ def _add_colvar_merge(subparsers):
     parser.add_argument(
         "--output",
         type=str,
-        help="Write merged COLVAR to this path. If omitted, data stays in memory.",
+        help="Write merged COLVAR to this path (default: BASENAME_merged.dat in base-dir).",
     )
     parser.add_argument(
         "--quiet",
@@ -263,24 +263,25 @@ def _handle_colvar_plot(args):
 
 
 def _handle_colvar_merge(args):
+    default_output = Path(args.base_dir) / f"{args.basename}_merged.dat"
+    output_path = Path(args.output) if args.output else default_output
     result = merge_colvar_files(
         base_dir=args.base_dir,
         basename=args.basename,
         discard_fraction=args.discard_fraction,
         time_ordered=args.time_ordered,
-        output_path=args.output,
+        output_path=output_path,
         verbose=not args.quiet,
         build_dataframe=False,
     )
     total_rows = result.row_count
     print(f"Merged {len(result.source_files)} file(s); total rows: {total_rows}")
-    if args.output:
-        out_path = Path(args.output).resolve()
-        try:
-            display_path = out_path.relative_to(Path.cwd())
-        except ValueError:
-            display_path = out_path
-        print(f"Wrote merged COLVAR to: {display_path}")
+    out_path = Path(output_path).resolve()
+    try:
+        display_path = out_path.relative_to(Path.cwd())
+    except ValueError:
+        display_path = out_path
+    print(f"Wrote merged COLVAR to: {display_path}")
     return 0
 
 
@@ -294,10 +295,6 @@ def _handle_colvar_reweight(args):
         grid_bin_tuple = _parse_values(args.grid_bin, int)
     else:
         grid_bin_tuple = (100,) if len(sigma_tuple) == 1 else (50, 50)
-
-    columns = _parse_values(args.columns, str) if args.columns is not None else None
-    if columns is None:
-        raise ValueError("At least one column must be provided via --columns")
 
     columns = _parse_values(args.columns, str) if args.columns is not None else None
     if columns is None:

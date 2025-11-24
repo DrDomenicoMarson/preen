@@ -74,31 +74,6 @@ def plot_colvar_timeseries(
         aggregates.append((path, time_col, cols_to_plot, df))
         if verbose:
             print(f"Loading COLVAR files: {idx}/{len(files)}", end="\r", flush=True)
-        if per_run:
-            out = path.with_suffix("")  # drop .gz if present
-            out_path = Path(f"{out}_timeseries.png")
-            _plot_single(
-                path.name,
-                time_col,
-                cols_to_plot,
-                [df],
-                out_path,
-                discard_fraction=discard_fraction,
-                marker=marker,
-                marker_size=marker_size,
-            )
-            outputs[path.name] = out_path
-            if include_hist:
-                hist_path = Path(f"{out}_hist.png")
-                _plot_histograms(
-                    path.name,
-                    cols_to_plot,
-                    [df],
-                    hist_path,
-                    discard_fraction=discard_fraction,
-                    marker_size=marker_size,
-                )
-                outputs[f"{path.name}_hist"] = hist_path
 
     if verbose:
         print(f"Loading COLVAR files: {len(aggregates)}/{len(files)} (done)          ")
