@@ -5,7 +5,7 @@ import pandas as pd
 
 from FESutils.constants import KB_KJ_MOL, ERROR_PREFIX, energy_conversion_factor
 from FESutils.colvar_io import load_colvar_data, open_text_file
-from FESutils.fes_config import FESConfig
+from FESutils.fes_config import FESConfig, FESStateConfig
 from FESutils.grid import build_grid, GridAxis, GridData
 from FESutils.fes_state import create_grid_runtime_state, create_sample_state, initialize_block_state
 from FESutils.kernel_eval import (
@@ -378,10 +378,12 @@ def _parse_grid_options_from_state(config: FESConfig, period_x, period_y, center
     return grid_bin_x, grid_bin_y, grid_min_x, grid_max_x, grid_min_y, grid_max_y
 
 
-def calculate_fes_from_state(config: FESConfig):
+def calculate_fes_from_state(config: FESStateConfig):
     """
     Calculate FES from STATE file (sum of kernels).
     """
+    if not isinstance(config, FESStateConfig):
+        raise TypeError("calculate_fes_from_state expects an FESStateConfig")
     set_num_threads(config.num_threads)
     # 1. Load Data
     try:
@@ -647,8 +649,8 @@ def calculate_fes_from_state(config: FESConfig):
         options = OutputOptions(
             fmt=config.fmt,
             mintozero=config.mintozero,
-            calc_deltaF=(config.delta_f_threshold is not None),
-            delta_threshold=config.delta_f_threshold,
+            calc_deltaF=False,
+            delta_threshold=None,
             kbt=config.kbt,
             backup=config.backup,
             energy_unit=config.output_energy_unit,

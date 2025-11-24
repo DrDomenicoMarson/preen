@@ -5,7 +5,7 @@ import numpy as np
 import matplotlib
 matplotlib.use('Agg')
 import FESutils.api
-from FESutils.fes_config import FESConfig
+from FESutils.fes_config import FESStateConfig
 from FESutils.constants import KB_KJ_MOL
 
 @pytest.fixture(scope="module")
@@ -38,7 +38,7 @@ def test_run_kernels_for_rst(state_env):
     if not os.path.exists(state_env['kernels_file']):
         pytest.skip(f"KERNELSforRST not found at {state_env['kernels_file']}")
 
-    config = FESConfig(
+    config = FESStateConfig(
         filename=state_env['kernels_file'],
         outfile=state_env['outfile'],
         temp=300.0,
