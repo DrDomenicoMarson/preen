@@ -12,7 +12,7 @@ from pathlib import Path
 
 from .colvar_merge import merge_colvar_files, discover_colvar_files, _read_header_and_count
 from .colvar_plot import plot_colvar_timeseries
-from .api import calculate_fes
+from .colvar_api import calculate_fes
 from .fes_config import FESConfig
 
 
