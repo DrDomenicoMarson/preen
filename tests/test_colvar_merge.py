@@ -152,6 +152,24 @@ def test_header_length_mismatch_option(tmp_path):
     assert result.row_count == 4
 
 
+def test_written_merge_preserves_fields_header(tmp_path):
+    d = tmp_path / "run"
+    d.mkdir()
+    _write_colvar(
+        d / "COLVAR",
+        [
+            "0 0.0 0.1",
+            "1 0.1 0.2",
+        ],
+    )
+    out_path = tmp_path / "merged.dat"
+    merge_colvar_files(base_dir=d, output_path=out_path)
+    assert out_path.exists()
+    with open(out_path, "r", encoding="utf-8") as f:
+        first_line = f.readline()
+    assert first_line.startswith("#! FIELDS")
+
+
 def test_load_colvar_with_merge_result_matches(tmp_path):
     # Prepare a simple COLVAR file
     d = tmp_path / "run"

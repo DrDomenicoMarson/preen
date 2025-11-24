@@ -298,6 +298,8 @@ def _write_colvar(path: Path, header_lines: list[str], df: pd.DataFrame | list[s
     """
     Write merged COLVAR data using the provided header lines.
     """
+    if not header_lines or not header_lines[0].lstrip().startswith("#! FIELDS"):
+        raise ValueError("Invalid COLVAR header: first line must start with '#! FIELDS'")
     with open(path, "w", encoding="utf-8") as out:
         for line in header_lines:
             out.write(line if line.endswith("\n") else f"{line}\n")
