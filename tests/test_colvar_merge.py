@@ -7,7 +7,7 @@ import pytest
 
 from FESutils.colvar_merge import merge_colvar_files
 from FESutils.colvar_io import load_colvar_data
-from FESutils.api import calculate_fes
+from FESutils.colvar_api import calculate_fes
 from FESutils.fes_config import FESConfig
 from FESutils.constants import KB_KJ_MOL
 

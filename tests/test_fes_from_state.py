@@ -4,7 +4,7 @@ import shutil
 import numpy as np
 import matplotlib
 matplotlib.use('Agg')
-import FESutils.api
+from FESutils.state_api import calculate_fes_from_state
 from FESutils.fes_config import FESStateConfig
 from FESutils.constants import KB_KJ_MOL
 
@@ -48,7 +48,7 @@ def test_run_kernels_for_rst(state_env):
     )
     
     # Run main
-    FESutils.api.calculate_fes_from_state(config)
+    calculate_fes_from_state(config)
     
     # Check output exists
     assert os.path.exists(state_env['outfile'])

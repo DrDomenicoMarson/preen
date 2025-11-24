@@ -3,7 +3,7 @@ import os
 import shutil
 import numpy as np
 import glob
-import FESutils.api
+from FESutils.colvar_api import calculate_fes
 from FESutils.fes_config import FESConfig
 from FESutils.constants import KB_KJ_MOL
 
@@ -40,7 +40,7 @@ def regression_env():
 
 def run_fes(config):
     """Helper to run FES calculation with given config."""
-    FESutils.api.calculate_fes(config)
+    calculate_fes(config)
 
 def compare_files(test_file, ref_file):
     """Compare two FES output files numerically."""

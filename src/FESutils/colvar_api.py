@@ -1,21 +1,16 @@
 import os
-import sys
 import numpy as np
-import pandas as pd
-
-from FESutils.constants import KB_KJ_MOL, ERROR_PREFIX, energy_conversion_factor
-from FESutils.colvar_io import load_colvar_data, open_text_file
-from FESutils.fes_config import FESConfig, FESStateConfig
-from FESutils.grid import build_grid, GridAxis, GridData
-from FESutils.fes_state import create_grid_runtime_state, create_sample_state, initialize_block_state
-from FESutils.kernel_eval import (
-    KernelEvaluator, KernelParams, 
-    _numba_calc_prob_1d, _numba_calc_der_prob_1d, 
-    _numba_calc_prob_2d, _numba_calc_der_prob_2d
-)
-from FESutils.fes_output import OutputOptions, SampleStats, write_standard_output, write_block_output
-from FESutils.fes_plot import PlotManager
 from numba import set_num_threads
+
+from .constants import KB_KJ_MOL, ERROR_PREFIX, energy_conversion_factor
+from .colvar_io import load_colvar_data
+from .fes_config import FESConfig
+from .grid import build_grid
+from .fes_state import create_grid_runtime_state, create_sample_state, initialize_block_state
+from .kernel_eval import KernelEvaluator, KernelParams
+from .fes_output import OutputOptions, SampleStats, write_standard_output, write_block_output
+from .fes_plot import PlotManager
+
 
 def calculate_fes(config: FESConfig, merge_result=None):
     """
@@ -31,7 +26,7 @@ def calculate_fes(config: FESConfig, merge_result=None):
 
     if config.dimension > 2:
         raise ValueError(f"{ERROR_PREFIX} only 1 or 2 dimensional bias are supported")
-        
+
     print("")
 
     def _display_path(path: str) -> str:
@@ -57,7 +52,7 @@ def calculate_fes(config: FESConfig, merge_result=None):
     calc_der = config.calc_der
     mintozero = config.mintozero
     outfile = config.outfile
-    
+
     # Handle outfile path logic
     if outfile.endswith(os.sep):
         base_dir = outfile.rstrip(os.sep)
@@ -78,7 +73,7 @@ def calculate_fes(config: FESConfig, merge_result=None):
     # Ensure parent directory exists if provided
     if output_dir:
         os.makedirs(output_dir, exist_ok=True)
-    
+
     if config.random_blocks:
         if config.blocks_num == 1:
             raise ValueError(f"{ERROR_PREFIX} --random-blocks requires --blocks > 1")
@@ -89,7 +84,7 @@ def calculate_fes(config: FESConfig, merge_result=None):
         else:
             print(f" shuffling data randomly across blocks (seed: {config.block_seed})")
         samples.apply_permutation(perm)
-        
+
     grid = build_grid(config, colvar_data)
     grid_state = create_grid_runtime_state(grid, calc_der)
     axis_x = grid_state.axis_x
@@ -98,7 +93,7 @@ def calculate_fes(config: FESConfig, merge_result=None):
     grid_min_x = axis_x.minimum
     grid_max_x = axis_x.maximum
     period_x = axis_x.period
-    
+
     if dim2 and axis_y is None:
         raise RuntimeError(
             f"{ERROR_PREFIX} internal inconsistency: missing second grid axis"
@@ -121,23 +116,23 @@ def calculate_fes(config: FESConfig, merge_result=None):
             x, y = grid_state.mesh
         else:
             x, y = np.meshgrid(grid_cv_x, grid_cv_y, indexing="ij")
-            
+
     fes = grid_state.fes
     der_fes_x = grid_state.der_fes_x
     der_fes_y = grid_state.der_fes_y
     calc_deltaF = config.calculate_delta_f
     ts = config.delta_f_threshold
     output_conv = energy_conversion_factor("kJ/mol", config.output_energy_unit)
-    
+
     if calc_deltaF and (ts <= grid_min_x or ts >= grid_max_x):
         print(" +++ WARNING: the provided --deltaFat is out of the CV grid +++")
         calc_deltaF = False
-        
+
     if config.blocks_num != 1 and calc_der:
         raise ValueError(
             f"{ERROR_PREFIX} derivatives not supported with --blocks, remove --der option"
         )
-        
+
     block_state = initialize_block_state(config, samples.len_tot, fes.shape)
     block_av = block_state.enabled
     if block_av and config.stride > 0:
@@ -167,7 +162,7 @@ def calculate_fes(config: FESConfig, merge_result=None):
         chunks = max(1, int(samples.len_tot / stride))
         prefix = "blocks" if chunk_kind == "block" else "cumulative stride"
         print(f" printing {chunks} FES files ({prefix}) to {_display_path(chunk_dir)}")
-        
+
     output_options = OutputOptions(
         fmt=fmt,
         mintozero=mintozero,
@@ -178,7 +173,7 @@ def calculate_fes(config: FESConfig, merge_result=None):
         energy_unit=config.output_energy_unit,
         energy_conversion=output_conv,
     )
-    
+
     names = (name_cv_x, name_cv_y if dim2 else None)
     mesh_tuple = (x, y) if dim2 else None
     kernel_params = KernelParams(
@@ -188,7 +183,6 @@ def calculate_fes(config: FESConfig, merge_result=None):
     plot_manager = PlotManager(
         config.plot, dim2, grid_state.axis_x, grid_state.axis_y, mintozero, mesh_tuple
     )
-
 
     def _chunk_path(idx: int) -> str:
         if chunk_dir is None:
@@ -240,7 +234,7 @@ def calculate_fes(config: FESConfig, merge_result=None):
         )
         if chunk_kind is not None:
             it += 1
-            
+
     if config.plot:
         if chunk_kind is None:
             standard_plot_path = (
@@ -269,7 +263,7 @@ def calculate_fes(config: FESConfig, merge_result=None):
         write_standard_output(
             outfile, grid_state, names, output_options, last_stats, mesh_tuple
         )
-            
+
     if block_av:
         block_dir = chunk_dir if chunk_dir is not None else (
             os.path.join(output_dir, f"{root_name}_blocks-{blocks_num}")
@@ -332,7 +326,3 @@ def calculate_fes(config: FESConfig, merge_result=None):
             )
         np.copyto(grid_state.fes, original_fes)
     print("                                                            ")
-
-# Delegate STATE handling to the dedicated module (overrides legacy in-file implementation)
-from FESutils.state_api import calculate_fes_from_state as _state_calc_fes  # type: ignore
-calculate_fes_from_state = _state_calc_fes

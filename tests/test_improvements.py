@@ -5,7 +5,7 @@ import time
 import numpy as np
 import matplotlib
 matplotlib.use('Agg')
-import FESutils.api
+from FESutils.colvar_api import calculate_fes
 from FESutils.fes_config import FESConfig
 from FESutils.fes_output import backup_file
 from FESutils.constants import KB_KJ_MOL
@@ -79,7 +79,7 @@ def test_config_validation(backup_env):
     
     # calculate_fes should raise ValueError because only 1D or 2D supported
     with pytest.raises(ValueError, match="only 1 or 2 dimensional bias are supported"):
-        FESutils.api.calculate_fes(config)
+        calculate_fes(config)
 
 def test_no_backup_option(backup_env):
     """Test that backup=False disables backup creation."""
@@ -98,14 +98,14 @@ def test_no_backup_option(backup_env):
     )
     
     # First run
-    FESutils.api.calculate_fes(config)
+    calculate_fes(config)
     assert outfile.exists()
     
     mtime1 = outfile.stat().st_mtime
     
     # Second run (should overwrite without backup)
     time.sleep(0.1)
-    FESutils.api.calculate_fes(config)
+    calculate_fes(config)
     
     assert outfile.exists()
     assert not (backup_env['test_dir'] / 'no_backup.dat.1').exists()

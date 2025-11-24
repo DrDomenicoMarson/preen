@@ -5,8 +5,8 @@ Example script demonstrating how to use the FESutils library to calculate FES fr
 """
 
 import os
-from FESutils.fes_config import FESConfig
-from FESutils.api import calculate_fes_from_state
+from FESutils.fes_config import FESStateConfig
+from FESutils.state_api import calculate_fes_from_state
 
 def main():
     # Define configuration
@@ -16,7 +16,7 @@ def main():
 
     state_file = os.path.join(example_data_dir, 'KERNELSforRST')
 
-    config = FESConfig(
+    config = FESStateConfig(
         filename=state_file,
         outfile=os.path.join(output_dir, 'fes-state.dat'),
         temp=300.0,
