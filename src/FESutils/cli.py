@@ -49,6 +49,11 @@ def _add_colvar_merge(subparsers):
         help="Write merged COLVAR to this path (default: BASENAME_merged.dat in base-dir).",
     )
     parser.add_argument(
+        "--allow-header-mismatch",
+        action="store_true",
+        help="Allow merging files whose header line count differs (warns and proceeds).",
+    )
+    parser.add_argument(
         "--quiet",
         action="store_true",
         help="Suppress progress output.",
@@ -273,6 +278,7 @@ def _handle_colvar_merge(args):
         output_path=output_path,
         verbose=not args.quiet,
         build_dataframe=False,
+        allow_header_mismatch=args.allow_header_mismatch,
     )
     total_rows = result.row_count
     print(f"Merged {len(result.source_files)} file(s); total rows: {total_rows}")

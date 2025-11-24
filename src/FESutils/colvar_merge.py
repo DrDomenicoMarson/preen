@@ -129,6 +129,7 @@ def merge_colvar_files(
     output_path: str | Path | None = None,
     verbose: bool = True,
     build_dataframe: bool = True,
+    allow_header_mismatch: bool = False,
 ) -> MergeResult:
     """
     Merge COLVAR files located under base_dir.
@@ -138,6 +139,7 @@ def merge_colvar_files(
     - output_path: if provided, write merged data with the first header.
     - verbose: print progress information while loading files.
     - build_dataframe: build numeric dataframe (set False to speed up merge-only CLI).
+    - allow_header_mismatch: allow files whose header line count differs from the first file (warns once per file).
     """
     if not (0.0 <= discard_fraction <= 1.0):
         raise ValueError("discard_fraction must be between 0.0 and 1.0")
@@ -163,6 +165,7 @@ def merge_colvar_files(
     total_seen = 0
     total_discarded = 0
     total_malformed = 0
+    warned_headers: set[Path] = set()
 
     streaming_path = (
         output_path is not None and not build_dataframe and not interleave and not time_ordered
@@ -178,9 +181,22 @@ def merge_colvar_files(
         hdr_curr, fields_curr, data_lines = _read_header_and_count(path)
         if not hdr_curr or fields_curr != fields:
             continue
+        if len(hdr_curr) != len(header_lines):
+            if not allow_header_mismatch:
+                raise ValueError(
+                    f"Header length differs in file {path}: expected {len(header_lines)} line(s), "
+                    f"found {len(hdr_curr)}. Use allow_header_mismatch=True to proceed."
+                )
+            if path not in warned_headers:
+                if verbose:
+                    print(
+                        f"Warning: header length differs in {path} "
+                        f"(expected {len(header_lines)}, found {len(hdr_curr)})"
+                    )
+                warned_headers.add(path)
         discard_count = int(data_lines * discard_fraction)
         with open_text_file(str(path)) as handle:
-            for _ in range(len(header_lines)):
+            for _ in range(len(hdr_curr)):
                 next(handle, None)
             for _ in range(discard_count):
                 if next(handle, None) is not None:

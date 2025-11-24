@@ -124,6 +124,34 @@ def test_merge_skips_mismatched_headers(tmp_path):
     assert result.source_files[0].name == "COLVAR"
 
 
+def test_header_length_mismatch_option(tmp_path):
+    d0 = tmp_path / "0"
+    d1 = tmp_path / "1"
+    d0.mkdir()
+    d1.mkdir()
+    _write_colvar(
+        d0 / "COLVAR",
+        [
+            "0 0.0 0.1",
+            "1 0.1 0.2",
+        ],
+    )
+    with open(d1 / "COLVAR.1", "w", encoding="utf-8") as f:
+        f.write("#! FIELDS time cv1 .bias\n")
+        f.write("#! SET min_cv1 -3.14\n")
+        f.write("#! SET max_cv1 3.14\n")
+        f.write("#! SET dummy 1\n")  # extra header line to force mismatch
+        f.write("0 0.5 0.6\n")
+        f.write("1 0.6 0.7\n")
+
+    with pytest.raises(ValueError):
+        merge_colvar_files(base_dir=tmp_path)
+
+    result = merge_colvar_files(base_dir=tmp_path, allow_header_mismatch=True)
+    assert len(result.source_files) == 2
+    assert result.row_count == 4
+
+
 def test_load_colvar_with_merge_result_matches(tmp_path):
     # Prepare a simple COLVAR file
     d = tmp_path / "run"
