@@ -39,10 +39,12 @@ def _add_colvar_merge(subparsers):
         help="Fraction of each file to discard from the start (0.0-1.0). Default: 0.1.",
     )
     parser.add_argument(
-        "--time-ordered",
-        action="store_true",
-        help="Interleave lines by index across files (round-robin) instead of concatenating.",
+        "--concat",
+        dest="time_ordered",
+        action="store_false",
+        help="Concatenate files instead of interleaving lines (default is interleaved).",
     )
+    parser.set_defaults(time_ordered=True)
     parser.add_argument(
         "--output",
         type=str,
@@ -117,10 +119,12 @@ def _add_colvar_reweight(subparsers):
         help="Fraction of each file to discard from the start (0.0-1.0). Default: 0.1.",
     )
     parser.add_argument(
-        "--time-ordered",
-        action="store_true",
-        help="Interleave lines by index across files (round-robin) instead of concatenating.",
+        "--concat",
+        dest="time_ordered",
+        action="store_false",
+        help="Concatenate files instead of interleaving lines (default is interleaved).",
     )
+    parser.set_defaults(time_ordered=True)
     parser.add_argument(
         "--columns",
         nargs="+",

@@ -54,6 +54,7 @@ def test_merge_drops_malformed_and_discards(tmp_path):
         base_dir=tmp_path,
         discard_fraction=0.5,  # drop half the valid rows from each file
         time_ordered=False,
+        build_dataframe=True,
     )
     # Each file has 4 valid rows; discard_fraction=0.5 keeps 2 per file => 4 total
     assert len(result.dataframe) == 4
@@ -82,7 +83,7 @@ def test_merge_time_order_no_stitch(tmp_path):
             "1 1.1 0.5",
         ],
     )
-    result = merge_colvar_files(base_dir=tmp_path, time_ordered=True)
+    result = merge_colvar_files(base_dir=tmp_path, time_ordered=True, build_dataframe=True)
     times = result.dataframe["time"].to_numpy()
     # Sorting should not modify values; just stable sort by time
     assert np.all(times == np.array([0, 0, 1, 1, 2]))
@@ -119,7 +120,7 @@ def test_merge_skips_mismatched_headers(tmp_path):
     with open(d1 / "COLVAR.1", "w", encoding="utf-8") as f:
         f.write("#! FIELDS time cv1 cv2 .bias\n")
         f.write("0 0.0 0.1 0.5\n")
-        result = merge_colvar_files(base_dir=tmp_path)
+    result = merge_colvar_files(base_dir=tmp_path, build_dataframe=True)
     assert len(result.source_files) == 1
     assert result.source_files[0].name == "COLVAR"
 
@@ -182,7 +183,7 @@ def test_load_colvar_with_merge_result_matches(tmp_path):
             "2 0.2 0.0",
         ],
     )
-    result = merge_colvar_files(base_dir=d)
+    result = merge_colvar_files(base_dir=d, build_dataframe=True)
     outfile = tmp_path / "fes.dat"
     config = FESConfig(
         filename="MERGED_IN_MEMORY",
