@@ -267,10 +267,13 @@ def build_dataframe_from_lines(
     fields: Sequence[str],
     time_ordered: bool,
     requested_columns: Sequence[str] | None = None,
+    verbose: bool = False,
 ) -> tuple[pd.DataFrame, str | None]:
     """
     Convert merged lines (strings) into a numeric dataframe.
     """
+    if verbose:
+        print(f"Building dataframe from {len(lines)} merged lines...", end="\r", flush=True)
     if requested_columns is not None:
         missing = [c for c in requested_columns if c not in fields]
         if missing:
@@ -294,6 +297,8 @@ def build_dataframe_from_lines(
         time_col = merged_df.columns[0]
     if time_ordered and time_col is not None:
         merged_df = merged_df.reset_index(drop=True)
+    if verbose:
+        print(f"Building dataframe from {len(lines)} merged lines...done          ")
     return merged_df, time_col
 
 
@@ -353,6 +358,7 @@ def merge_colvar_files(
         text_result.fields,
         time_ordered=time_ordered,
         requested_columns=requested_columns,
+        verbose=verbose,
     )
 
     if output_path:

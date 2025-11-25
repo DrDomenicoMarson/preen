@@ -113,6 +113,7 @@ def plot_colvar_timeseries(
                 marker=marker,
                 marker_size=marker_size,
                 dpi=run_dpi,
+                verbose=verbose,
             )
             outputs[path.name] = out_path
             if include_hist:
@@ -125,6 +126,7 @@ def plot_colvar_timeseries(
                     discard_fraction=discard_fraction,
                     marker_size=marker_size,
                     dpi=run_dpi,
+                    verbose=verbose,
                 )
                 outputs[f"{path.name}_hist"] = hist_path
             print(f"Plotting per-run: {i}/{total_plots}", end="\r", flush=True)
@@ -143,6 +145,7 @@ def plot_colvar_timeseries(
                 marker=marker,
                 marker_size=marker_size,
                 dpi=run_dpi,
+                verbose=verbose,
             )
             outputs[path.name] = out_path
             if include_hist:
@@ -155,6 +158,7 @@ def plot_colvar_timeseries(
                     discard_fraction=discard_fraction,
                     marker_size=marker_size,
                     dpi=run_dpi,
+                    verbose=verbose,
                 )
                 outputs[f"{path.name}_hist"] = hist_path
 
@@ -176,6 +180,7 @@ def plot_colvar_timeseries(
             marker=marker,
             marker_size=marker_size,
             dpi=agg_dpi,
+            verbose=verbose,
         )
         outputs["aggregate"] = out_path
         if include_hist:
@@ -188,6 +193,7 @@ def plot_colvar_timeseries(
                 discard_fraction=discard_fraction,
                 marker_size=marker_size,
                 dpi=agg_dpi,
+                verbose=verbose,
             )
             outputs["aggregate_hist"] = hist_out
         if verbose:
@@ -206,11 +212,18 @@ def _plot_single(
     marker: str,
     marker_size: float,
     dpi: int,
+    verbose: bool = False,
 ) -> None:
     with plt.rc_context(_RC_SMALL):
         n_plots = len(cols)
         cols_per_row = 3 if n_plots > 2 else n_plots
         rows = math.ceil(n_plots / cols_per_row)
+        if verbose:
+            print(
+                f"Plotting aggregate to {out_path} ({len(dfs)} run(s), {n_plots} column(s))...",
+                end="\r",
+                flush=True,
+            )
         fig, axes = plt.subplots(rows, cols_per_row, squeeze=False)
         flat_axes = axes.flat
         for idx, col in enumerate(cols):
@@ -234,6 +247,8 @@ def _plot_single(
         rect_right = 1
         fig.tight_layout(rect=[0, 0, rect_right, 0.96])
         fig.savefig(out_path, dpi=dpi)
+        if verbose:
+            print(f"Plotted aggregate to {out_path}                     ")
         plt.close(fig)
 
 
@@ -246,11 +261,18 @@ def _plot_histograms(
     marker: str | None = None,
     marker_size: float | None = None,
     dpi: int = 600,
+    verbose: bool = False,
 ) -> None:
     with plt.rc_context(_RC_SMALL):
         n_plots = len(cols)
         cols_per_row = 3 if n_plots > 2 else n_plots
         rows = math.ceil(n_plots / cols_per_row)
+        if verbose:
+            print(
+                f"Plotting histograms to {out_path} ({len(dfs)} run(s), {n_plots} column(s))...",
+                end="\r",
+                flush=True,
+            )
         fig, axes = plt.subplots(rows, cols_per_row, squeeze=False)
         flat_axes = axes.flat
         for idx, col in enumerate(cols):
@@ -266,4 +288,6 @@ def _plot_histograms(
         rect_right = 1
         fig.tight_layout(rect=[0, 0, rect_right, 0.96])
         fig.savefig(out_path, dpi=dpi)
+        if verbose:
+            print(f"Plotted histograms to {out_path}                     ")
         plt.close(fig)
