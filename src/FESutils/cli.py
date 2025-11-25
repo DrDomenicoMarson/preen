@@ -176,6 +176,12 @@ def _add_colvar_reweight(subparsers):
         help="Output format for numeric values.",
     )
     parser.add_argument(
+        "--output-energy-unit",
+        default="kJ/mol",
+        choices=["kJ/mol", "kcal/mol", "kj/mol", "kcalmol", "kcal/mol"],
+        help="Energy unit for outputs (default: kJ/mol).",
+    )
+    parser.add_argument(
         "--num-threads",
         type=int,
         default=None,
@@ -253,6 +259,12 @@ def _add_fes_from_state(subparsers):
         "--fmt",
         default="% 12.6f",
         help="Output format for numeric values.",
+    )
+    parser.add_argument(
+        "--output-energy-unit",
+        default="kJ/mol",
+        choices=["kJ/mol", "kcal/mol", "kj/mol", "kcalmol", "kcal/mol"],
+        help="Energy unit for outputs (default: kJ/mol).",
     )
     parser.add_argument(
         "--num-threads",
@@ -450,6 +462,7 @@ def _handle_colvar_reweight(args):
         plot=args.plot,
         fmt=args.fmt,
         num_threads=args.num_threads,
+        output_energy_unit=args.output_energy_unit,
     )
     calculate_fes(config, merge_result=merge_result)
     out_path = Path(args.output).resolve()
@@ -487,6 +500,7 @@ def _handle_fes_from_state(args):
         backup=args.backup,
         fmt=args.fmt,
         num_threads=args.num_threads,
+        output_energy_unit=args.output_energy_unit,
     )
     calculate_fes_from_state(config)
     out_path = Path(args.outfile).resolve()

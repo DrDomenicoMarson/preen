@@ -29,8 +29,14 @@ class BaseFESConfig:
         if self.kbt is None:
             if self.temp is None:
                 raise ValueError("Either 'kbt' or 'temp' must be provided.")
+            if self.temp <= 0:
+                raise ValueError("Temperature must be positive.")
             object.__setattr__(self, "kbt", self.temp * KB_KJ_MOL)
         elif self.temp is not None:
+            if self.temp <= 0:
+                raise ValueError("Temperature must be positive.")
+            if self.kbt <= 0:
+                raise ValueError("kbt must be positive.")
             expected_kbt = self.temp * KB_KJ_MOL
             if not math.isclose(self.kbt, expected_kbt, rel_tol=1e-6, abs_tol=1e-9):
                 raise ValueError(
@@ -38,6 +44,8 @@ class BaseFESConfig:
                     f"kbt={self.kbt} vs temp-derived {expected_kbt} (kJ/mol). "
                     "Provide only one or make them consistent."
                 )
+        elif self.kbt is not None and self.kbt <= 0:
+            raise ValueError("kbt must be positive.")
         object.__setattr__(self, "input_energy_unit", normalize_energy_unit(self.input_energy_unit))
         object.__setattr__(self, "output_energy_unit", normalize_energy_unit(self.output_energy_unit))
         threads = self.num_threads
