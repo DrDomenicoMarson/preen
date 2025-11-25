@@ -6,7 +6,7 @@ from __future__ import annotations
 
 import math
 from pathlib import Path
-from typing import Iterable, Sequence
+from typing import Sequence
 
 import matplotlib
 
@@ -178,20 +178,21 @@ def _plot_single(labels, time_col: str, cols: Sequence[str], dfs: list, out_path
     n_plots = len(cols)
     cols_per_row = 3 if n_plots > 2 else n_plots
     rows = math.ceil(n_plots / cols_per_row)
-    width_factor = 5.0 if cols_per_row > 1 else 4.5
-    fig, axes = plt.subplots(rows, cols_per_row, figsize=(width_factor * cols_per_row, 2.5 * rows), squeeze=False)
+    fig, axes = plt.subplots(rows, cols_per_row, squeeze=False)
     flat_axes = axes.flat
-    label_list = []
     for idx, col in enumerate(cols):
         ax = flat_axes[idx]
         for df, label in zip(dfs, labels if isinstance(labels, list) else [labels] * len(dfs)):
-            ax.scatter(df[time_col], df[col], label=label, s=marker_size, marker=marker, alpha=0.8)
-            label_list.append(label)
-        ax.set_xlabel(time_col)
-        ax.set_ylabel(col)
-    unique_labels = list(dict.fromkeys(label_list))
-    legend = None
-    legend_space = False
+            ax.plot(
+                df[time_col],
+                df[col],
+                linestyle="None",
+                marker=marker,
+                markersize=marker_size,
+                markeredgewidth=0.0,
+                alpha=0.8,
+            )
+        ax.set_title(col)
     title = f"COLVAR time series (discard {discard_fraction*100:.1f}% per file)"
     fig.suptitle(title, fontsize=10)
     # Hide unused axes
