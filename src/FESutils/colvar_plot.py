@@ -176,10 +176,10 @@ def plot_colvar_timeseries(
 
 def _plot_single(labels, time_col: str, cols: Sequence[str], dfs: list, out_path: Path, discard_fraction: float, marker: str, marker_size: float) -> None:
     rc_small = {
-        "axes.titlesize": 6,
-        "xtick.labelsize": 6,
-        "ytick.labelsize": 6,
-        "figure.titlesize": 8,
+        "axes.titlesize": 5,
+        "xtick.labelsize": 3.5,
+        "ytick.labelsize": 3.5,
+        "figure.titlesize": 5,
     }
     with plt.rc_context(rc_small):
         n_plots = len(cols)
@@ -213,10 +213,10 @@ def _plot_single(labels, time_col: str, cols: Sequence[str], dfs: list, out_path
 
 def _plot_histograms(labels, cols: Sequence[str], dfs: list, out_path: Path, discard_fraction: float, marker: str | None = None, marker_size: float | None = None) -> None:
     rc_small = {
-        "axes.titlesize": 6,
-        "xtick.labelsize": 6,
-        "ytick.labelsize": 6,
-        "figure.titlesize": 8,
+        "axes.titlesize": 5,
+        "xtick.labelsize": 3.5,
+        "ytick.labelsize": 3.5,
+        "figure.titlesize": 5,
     }
     with plt.rc_context(rc_small):
         n_plots = len(cols)
