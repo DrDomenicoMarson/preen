@@ -15,6 +15,12 @@ import matplotlib.pyplot as plt
 
 from .colvar_merge import discover_colvar_files, read_colvar_dataframe
 
+_RC_SMALL = {
+    "axes.titlesize": 5,
+    "xtick.labelsize": 3.5,
+    "ytick.labelsize": 3.5,
+    "figure.titlesize": 5,
+}
 
 def _resolve_columns(fields: Sequence[str], columns: Sequence[str] | None) -> list[str]:
     if columns is None:
@@ -41,6 +47,8 @@ def plot_colvar_timeseries(
     marker: str = ",",
     marker_size: float = 0.4,
     verbose: bool = True,
+    aggregate_dpi: int = 600,
+    per_run_dpi: int | None = None,
 ) -> dict[str, Path]:
     """
     Plot time series from COLVAR files discovered in base_dir.
@@ -53,6 +61,14 @@ def plot_colvar_timeseries(
     """
     if not (0.0 <= discard_fraction <= 1.0):
         raise ValueError("discard_fraction must be between 0.0 and 1.0")
+
+    agg_dpi = int(aggregate_dpi)
+    if agg_dpi <= 0:
+        raise ValueError("aggregate_dpi must be positive")
+    per_run_default = max(1, agg_dpi // 2)
+    run_dpi = int(per_run_dpi) if per_run_dpi is not None else per_run_default
+    if run_dpi <= 0:
+        raise ValueError("per_run_dpi must be positive")
 
     files = discover_colvar_files(base_dir, basename=basename)
     aggregates = []
@@ -96,6 +112,7 @@ def plot_colvar_timeseries(
                 discard_fraction=discard_fraction,
                 marker=marker,
                 marker_size=marker_size,
+                dpi=run_dpi,
             )
             outputs[path.name] = out_path
             if include_hist:
@@ -107,6 +124,7 @@ def plot_colvar_timeseries(
                     hist_path,
                     discard_fraction=discard_fraction,
                     marker_size=marker_size,
+                    dpi=run_dpi,
                 )
                 outputs[f"{path.name}_hist"] = hist_path
             print(f"Plotting per-run: {i}/{total_plots}", end="\r", flush=True)
@@ -124,6 +142,7 @@ def plot_colvar_timeseries(
                 discard_fraction=discard_fraction,
                 marker=marker,
                 marker_size=marker_size,
+                dpi=run_dpi,
             )
             outputs[path.name] = out_path
             if include_hist:
@@ -135,6 +154,7 @@ def plot_colvar_timeseries(
                     hist_path,
                     discard_fraction=discard_fraction,
                     marker_size=marker_size,
+                    dpi=run_dpi,
                 )
                 outputs[f"{path.name}_hist"] = hist_path
 
@@ -155,6 +175,7 @@ def plot_colvar_timeseries(
             discard_fraction=discard_fraction,
             marker=marker,
             marker_size=marker_size,
+            dpi=agg_dpi,
         )
         outputs["aggregate"] = out_path
         if include_hist:
@@ -166,6 +187,7 @@ def plot_colvar_timeseries(
                 hist_out,
                 discard_fraction=discard_fraction,
                 marker_size=marker_size,
+                dpi=agg_dpi,
             )
             outputs["aggregate_hist"] = hist_out
         if verbose:
@@ -174,14 +196,18 @@ def plot_colvar_timeseries(
     return outputs
 
 
-def _plot_single(labels, time_col: str, cols: Sequence[str], dfs: list, out_path: Path, discard_fraction: float, marker: str, marker_size: float) -> None:
-    rc_small = {
-        "axes.titlesize": 5,
-        "xtick.labelsize": 3.5,
-        "ytick.labelsize": 3.5,
-        "figure.titlesize": 5,
-    }
-    with plt.rc_context(rc_small):
+def _plot_single(
+    labels,
+    time_col: str,
+    cols: Sequence[str],
+    dfs: list,
+    out_path: Path,
+    discard_fraction: float,
+    marker: str,
+    marker_size: float,
+    dpi: int,
+) -> None:
+    with plt.rc_context(_RC_SMALL):
         n_plots = len(cols)
         cols_per_row = 3 if n_plots > 2 else n_plots
         rows = math.ceil(n_plots / cols_per_row)
@@ -207,18 +233,21 @@ def _plot_single(labels, time_col: str, cols: Sequence[str], dfs: list, out_path
             ax.set_visible(False)
         rect_right = 1
         fig.tight_layout(rect=[0, 0, rect_right, 0.96])
-        fig.savefig(out_path, dpi=600)
+        fig.savefig(out_path, dpi=dpi)
         plt.close(fig)
 
 
-def _plot_histograms(labels, cols: Sequence[str], dfs: list, out_path: Path, discard_fraction: float, marker: str | None = None, marker_size: float | None = None) -> None:
-    rc_small = {
-        "axes.titlesize": 5,
-        "xtick.labelsize": 3.5,
-        "ytick.labelsize": 3.5,
-        "figure.titlesize": 5,
-    }
-    with plt.rc_context(rc_small):
+def _plot_histograms(
+    labels,
+    cols: Sequence[str],
+    dfs: list,
+    out_path: Path,
+    discard_fraction: float,
+    marker: str | None = None,
+    marker_size: float | None = None,
+    dpi: int = 600,
+) -> None:
+    with plt.rc_context(_RC_SMALL):
         n_plots = len(cols)
         cols_per_row = 3 if n_plots > 2 else n_plots
         rows = math.ceil(n_plots / cols_per_row)
@@ -236,5 +265,5 @@ def _plot_histograms(labels, cols: Sequence[str], dfs: list, out_path: Path, dis
             ax.set_visible(False)
         rect_right = 1
         fig.tight_layout(rect=[0, 0, rect_right, 0.96])
-        fig.savefig(out_path, dpi=600)
+        fig.savefig(out_path, dpi=dpi)
         plt.close(fig)

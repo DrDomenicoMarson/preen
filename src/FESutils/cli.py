@@ -294,6 +294,18 @@ def _add_colvar_plot(subparsers):
         help="Marker size for time-series scatter (default: 0.4).",
     )
     parser.add_argument(
+        "--dpi",
+        type=int,
+        default=600,
+        help="DPI for aggregate plot(s) (default: 600).",
+    )
+    parser.add_argument(
+        "--per-run-dpi",
+        type=int,
+        default=None,
+        help="DPI for per-run plot(s); default is half of aggregate dpi.",
+    )
+    parser.add_argument(
         "--time-column",
         default="time",
         help="Column to use for the x-axis (default: time; falls back to first column if missing).",
@@ -337,6 +349,8 @@ def _handle_colvar_plot(args):
         marker=args.marker,
         marker_size=args.marker_size,
         verbose=not args.quiet,
+        aggregate_dpi=args.dpi,
+        per_run_dpi=args.per_run_dpi,
     )
     for label, path in outputs.items():
         try:
