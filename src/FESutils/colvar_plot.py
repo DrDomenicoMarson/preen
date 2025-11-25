@@ -175,58 +175,65 @@ def plot_colvar_timeseries(
 
 
 def _plot_single(labels, time_col: str, cols: Sequence[str], dfs: list, out_path: Path, discard_fraction: float, marker: str, marker_size: float) -> None:
-    n_plots = len(cols)
-    cols_per_row = 3 if n_plots > 2 else n_plots
-    rows = math.ceil(n_plots / cols_per_row)
-    fig, axes = plt.subplots(rows, cols_per_row, squeeze=False)
-    flat_axes = axes.flat
-    for idx, col in enumerate(cols):
-        ax = flat_axes[idx]
-        for df, label in zip(dfs, labels if isinstance(labels, list) else [labels] * len(dfs)):
-            ax.plot(
-                df[time_col],
-                df[col],
-                linestyle="None",
-                marker=marker,
-                markersize=marker_size,
-                markeredgewidth=0.0,
-                alpha=0.8,
-            )
-        ax.set_title(col)
-    title = f"COLVAR time series (discard {discard_fraction*100:.1f}% per file)"
-    fig.suptitle(title, fontsize=10)
-    # Hide unused axes
-    for ax in flat_axes[n_plots:]:
-        ax.set_visible(False)
-    rect_right = 1
-    fig.tight_layout(rect=[0, 0, rect_right, 0.96])
-    fig.savefig(out_path, dpi=600)
-    plt.close(fig)
+    rc_small = {
+        "axes.titlesize": 6,
+        "xtick.labelsize": 6,
+        "ytick.labelsize": 6,
+        "figure.titlesize": 8,
+    }
+    with plt.rc_context(rc_small):
+        n_plots = len(cols)
+        cols_per_row = 3 if n_plots > 2 else n_plots
+        rows = math.ceil(n_plots / cols_per_row)
+        fig, axes = plt.subplots(rows, cols_per_row, squeeze=False)
+        flat_axes = axes.flat
+        for idx, col in enumerate(cols):
+            ax = flat_axes[idx]
+            for df, label in zip(dfs, labels if isinstance(labels, list) else [labels] * len(dfs)):
+                ax.plot(
+                    df[time_col],
+                    df[col],
+                    linestyle="None",
+                    marker=marker,
+                    markersize=marker_size,
+                    markeredgewidth=0.0,
+                    alpha=0.8,
+                )
+            ax.set_title(col)
+        title = f"COLVAR time series (discard {discard_fraction*100:.1f}% per file)"
+        fig.suptitle(title)
+        # Hide unused axes
+        for ax in flat_axes[n_plots:]:
+            ax.set_visible(False)
+        rect_right = 1
+        fig.tight_layout(rect=[0, 0, rect_right, 0.96])
+        fig.savefig(out_path, dpi=600)
+        plt.close(fig)
 
 
 def _plot_histograms(labels, cols: Sequence[str], dfs: list, out_path: Path, discard_fraction: float, marker: str | None = None, marker_size: float | None = None) -> None:
-    n_plots = len(cols)
-    cols_per_row = 3 if n_plots > 2 else n_plots
-    rows = math.ceil(n_plots / cols_per_row)
-    width_factor = 5.0 if cols_per_row > 1 else 4.5
-    fig, axes = plt.subplots(rows, cols_per_row, figsize=(width_factor * cols_per_row, 2.5 * rows), squeeze=False)
-    flat_axes = axes.flat
-    label_list = []
-    for idx, col in enumerate(cols):
-        ax = flat_axes[idx]
-        for df, label in zip(dfs, labels if isinstance(labels, list) else [labels] * len(dfs)):
-            ax.hist(df[col], bins=30, alpha=0.6, label=label)
-            label_list.append(label)
-        ax.set_xlabel(col)
-        ax.set_ylabel("count")
-    unique_labels = list(dict.fromkeys(label_list))
-    legend = None
-    legend_space = False
-    title = f"COLVAR histograms (discard {discard_fraction*100:.1f}% per file)"
-    fig.suptitle(title, fontsize=10)
-    for ax in flat_axes[n_plots:]:
-        ax.set_visible(False)
-    rect_right = 1
-    fig.tight_layout(rect=[0, 0, rect_right, 0.96])
-    fig.savefig(out_path, dpi=600)
-    plt.close(fig)
+    rc_small = {
+        "axes.titlesize": 6,
+        "xtick.labelsize": 6,
+        "ytick.labelsize": 6,
+        "figure.titlesize": 8,
+    }
+    with plt.rc_context(rc_small):
+        n_plots = len(cols)
+        cols_per_row = 3 if n_plots > 2 else n_plots
+        rows = math.ceil(n_plots / cols_per_row)
+        fig, axes = plt.subplots(rows, cols_per_row, squeeze=False)
+        flat_axes = axes.flat
+        for idx, col in enumerate(cols):
+            ax = flat_axes[idx]
+            for df, label in zip(dfs, labels if isinstance(labels, list) else [labels] * len(dfs)):
+                ax.hist(df[col], bins=30, alpha=0.6, label=label)
+            ax.set_title(col)
+        title = f"COLVAR histograms (discard {discard_fraction*100:.1f}% per file)"
+        fig.suptitle(title)
+        for ax in flat_axes[n_plots:]:
+            ax.set_visible(False)
+        rect_right = 1
+        fig.tight_layout(rect=[0, 0, rect_right, 0.96])
+        fig.savefig(out_path, dpi=600)
+        plt.close(fig)
