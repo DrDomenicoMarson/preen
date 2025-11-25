@@ -229,6 +229,7 @@ def _plot_histograms(labels, cols: Sequence[str], dfs: list, out_path: Path, dis
             for df, label in zip(dfs, labels if isinstance(labels, list) else [labels] * len(dfs)):
                 ax.hist(df[col], bins=30, alpha=0.6, label=label)
             ax.set_title(col)
+            ax.set_ylabel("")
         title = f"COLVAR histograms (discard {discard_fraction*100:.1f}% per file)"
         fig.suptitle(title)
         for ax in flat_axes[n_plots:]:
