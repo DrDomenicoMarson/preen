@@ -90,7 +90,7 @@ def _read_header_and_count(path: Path) -> tuple[list[str], list[str], int]:
                 handle.seek(pos)
                 break
             header_lines.append(line)
-        data_lines = sum(1 for _ in handle)
+        data_lines = sum(1 for l in handle if not l.startswith("#"))
     if not header_lines or not header_lines[0].startswith("#! FIELDS"):
         return [], [], 0
     fields = header_lines[0].split()[2:]
@@ -116,7 +116,25 @@ def read_colvar_dataframe(
     if drop >= data_lines:
         return None
 
-    # Fast C-engine read; skip malformed rows
+    # Compute how many physical lines to skip to drop `drop` data rows (ignoring comments)
+    extra_skipped = 0
+    if drop > 0:
+        skipped_data = 0
+        with open_text_file(str(path)) as handle:
+            for _ in range(len(header_lines)):
+                next(handle, None)
+            while skipped_data < drop:
+                line = handle.readline()
+                if not line:
+                    break
+                extra_skipped += 1
+                if line.startswith("#"):
+                    continue
+                skipped_data += 1
+
+    skip_rows_total = len(header_lines) + extra_skipped
+
+    # Fast C-engine read; skip malformed rows and comments
     df = pd.read_csv(
         path,
         sep=r"\s+",
@@ -124,7 +142,7 @@ def read_colvar_dataframe(
         header=None,
         names=fields,
         usecols=range(len(fields)),
-        skiprows=len(header_lines) + drop,
+        skiprows=skip_rows_total,
         engine="c",
         on_bad_lines="skip",
     )
@@ -196,9 +214,15 @@ def merge_colvar_lines(
         with open_text_file(str(path)) as handle:
             for _ in range(len(hdr_curr)):
                 next(handle, None)
-            for _ in range(discard_count):
-                if next(handle, None) is not None:
-                    total_discarded += 1
+            discarded = 0
+            while discarded < discard_count:
+                line = next(handle, None)
+                if line is None:
+                    break
+                if line.startswith("#"):
+                    continue
+                discarded += 1
+                total_discarded += 1
             for line_idx, line in enumerate(handle):
                 total_seen += 1
                 if line.startswith("#"):
@@ -475,7 +499,7 @@ def merge_multiple_colvar_files(
     for rk in run_keys:
         per_files = [runs[rk][b] for b in basenames]
         per_dfs: list[pd.DataFrame] = []
-        row_lengths: list[int] = []
+        row_len: int | None = None
 
         for path in per_files:
             res = read_colvar_dataframe(path, expected_fields=None, discard_fraction=discard_fraction)
@@ -484,23 +508,14 @@ def merge_multiple_colvar_files(
             hdr, fields, df = res
             if header_lines_ref is None:
                 header_lines_ref = hdr
-            row_lengths.append(len(df))
-            per_dfs.append(df)
-            source_files.append(path)
-
-        if not per_dfs:
-            continue
-        min_len = min(row_lengths)
-        max_len = max(row_lengths)
-        if max_len != min_len:
-            if verbose:
-                warnings.warn(
-                    f"Row count mismatch in run '{rk}': trimming all to {min_len} rows (min of {row_lengths})",
-                    stacklevel=2,
+            if row_len is None:
+                row_len = len(df)
+            elif len(df) != row_len:
+                raise ValueError(
+                    f"Row count mismatch in run '{rk}': expected {row_len} rows, got {len(df)} in {path}"
                 )
-            per_dfs = [df.iloc[:min_len].reset_index(drop=True) for df in per_dfs]
-        else:
-            per_dfs = [df.reset_index(drop=True) for df in per_dfs]
+            per_dfs.append(df.reset_index(drop=True))
+            source_files.append(path)
 
         combined = per_dfs[0].copy(deep=False)
         for idx in range(1, len(per_dfs)):
