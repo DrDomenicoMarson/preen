@@ -44,87 +44,112 @@ class ColvarData:
     bias: NDArray
 
 
-def load_colvar_data(config: FESConfig) -> ColvarData:
-    """Read COLVAR file according to the user configuration."""
-    with open_text_file(config.filename) as f:
-        fields = f.readline().split()
-        if len(fields) < 2 or fields[1] != "FIELDS":
-            raise ValueError(f'{ERROR_PREFIX} no FIELDS found in "{config.filename}"')
-        cv_infos = _resolve_cv_infos(fields, config.cv_spec)
-        bias_info = _resolve_bias_info(fields, config.bias_spec)
-        header_lines = _parse_header_metadata(f, cv_infos, config.calc_der)
+def load_colvar_data(config: FESConfig, merge_result=None) -> ColvarData:
+    """
+    Read COLVAR data according to the user configuration.
+    If merge_result (from colvar_merge.MergeResult) is provided, use the in-memory
+    dataframe and header instead of reading from disk.
+    """
+    # Lazy import to avoid circular dependency
+    from .colvar_merge import MergeResult
+
+    if merge_result is None:
+        with open_text_file(config.filename) as f:
+            header_tokens = f.readline().split()
+            if len(header_tokens) < 2 or header_tokens[1] != "FIELDS":
+                raise ValueError(f'{ERROR_PREFIX} no FIELDS found in "{config.filename}"')
+            field_names = header_tokens[2:]
+            cv_infos = _resolve_cv_infos(field_names, config.cv_spec)
+            bias_info = _resolve_bias_info(field_names, config.bias_spec)
+            header_lines = _parse_header_metadata(f, cv_infos, config.calc_der)
+            metadata = ColvarMetadata(
+                cvs=tuple(cv_infos), bias=bias_info, header_lines=header_lines
+            )
+        skip_rows = metadata.header_lines + config.skiprows
+        required_cols = [info.column for info in metadata.cvs] + metadata.bias.columns
+        required_cols = sorted(set(required_cols))
+        with open_text_file(config.filename) as f_data:
+            data = pd.read_table(
+                f_data,
+                dtype=float,
+                sep=r"\s+",
+                comment="#",
+                header=None,
+                usecols=required_cols,
+                skiprows=skip_rows,
+            )
+    else:
+        if not isinstance(merge_result, MergeResult):
+            raise TypeError("merge_result must be a MergeResult or None")
+        stripped_fields = list(merge_result.fields)
+        cv_infos = _resolve_cv_infos(stripped_fields, config.cv_spec)
+        bias_info = _resolve_bias_info(stripped_fields, config.bias_spec)
+        header_tail = "".join(merge_result.header_lines[1:]) if len(merge_result.header_lines) > 1 else ""
+        header_lines = _parse_header_metadata(io.StringIO(header_tail), cv_infos, config.calc_der)
         metadata = ColvarMetadata(
             cvs=tuple(cv_infos), bias=bias_info, header_lines=header_lines
         )
-    skip_rows = metadata.header_lines + config.skiprows
-    required_cols = [info.column for info in metadata.cvs] + metadata.bias.columns
-    required_cols = sorted(set(required_cols))
-    # Re-open file for pandas to read data
-    # Note: We cannot easily reuse the 'f' from above if it was a stream from tarfile
-    # that doesn't support seek(0).
-    # However, we know header_lines.
-    # If we use open_text_file again, we get a fresh stream.
-    
-    with open_text_file(config.filename) as f_data:
-        data = pd.read_table(
-            f_data,
-            dtype=float,
-            sep=r"\s+",
-            comment="#",
-            header=None,
-            usecols=required_cols,
-            skiprows=skip_rows,
-        )
+        data = merge_result.dataframe.copy(deep=False)
+        if config.skiprows > 0:
+            data = data.iloc[config.skiprows:]
+        # Ensure column ordering matches fields and drop any extra
+        data = data[stripped_fields]
+
     if data.isnull().values.any():
         raise ValueError(
             f"{ERROR_PREFIX} your COLVAR file contains NaNs. Check if last line is truncated"
         )
     if config.reverse:
         data = data.iloc[::-1]
+    required_cols = [info.column for info in metadata.cvs] + metadata.bias.columns
+    required_cols = sorted(set(required_cols))
+    if merge_result is not None:
+        col_names = [stripped_fields[idx] for idx in required_cols]
+    else:
+        col_names = required_cols
+    sub_data = data[col_names]
     col_map = {col: idx for idx, col in enumerate(required_cols)}
     cv_arrays = []
     for info in metadata.cvs:
         values = np.ascontiguousarray(
-            np.array(data.iloc[:, col_map[info.column]], dtype=float)
+            np.array(sub_data.iloc[:, col_map[info.column]], dtype=float)
         )
         cv_arrays.append(values)
     bias = np.zeros(len(cv_arrays[0]))
     for col in metadata.bias.columns:
-        bias += np.array(data.iloc[:, col_map[col]], dtype=float)
+        bias += np.array(sub_data.iloc[:, col_map[col]], dtype=float)
     energy_factor = energy_conversion_factor(config.input_energy_unit, "kJ/mol")
     bias = np.ascontiguousarray((bias * energy_factor) / config.kbt)
     return ColvarData(metadata=metadata, cv_values=tuple(cv_arrays), bias=bias)
 
 
 def _resolve_cv_infos(
-    fields: Sequence[str], cv_spec: Sequence[str]
+    field_names: Sequence[str], cv_spec: Sequence[str]
 ) -> tuple[CVInfo, ...]:
     infos = []
     for spec in cv_spec:
-        column, name = _resolve_single_cv(fields, spec.strip())
+        column, name = _resolve_single_cv(field_names, spec.strip())
         print(f' using cv "{name}" found at column {column+1}')
         infos.append(CVInfo(name=name, column=column))
     return tuple(infos)
 
 
 def _resolve_single_cv(fields: Sequence[str], spec: str) -> tuple[int, str]:
+    # Numeric spec: 1-based index into the data columns
     try:
         idx = int(spec) - 1
-        if idx < 0:
+        if idx < 0 or idx >= len(fields):
             raise ValueError
-        if idx + 2 >= len(fields):
-            raise ValueError
-        name = fields[idx + 2]
-        return idx, name
+        return idx, fields[idx]
     except ValueError:
         target = spec
         for pos, field in enumerate(fields):
             if field == target:
-                return pos - 2, target
+                return pos, target
         raise ValueError(f'{ERROR_PREFIX} cv "{spec}" not found')
 
 
-def _resolve_bias_info(fields: Sequence[str], bias_spec: str) -> BiasInfo:
+def _resolve_bias_info(field_names: Sequence[str], bias_spec: str) -> BiasInfo:
     if bias_spec.lower() == "no":
         columns = []
         names = []
@@ -136,25 +161,25 @@ def _resolve_bias_info(fields: Sequence[str], bias_spec: str) -> BiasInfo:
             columns = [int(token) - 1 for token in tokens]
             names = []
             for col in columns:
-                if col < 0 or col + 2 >= len(fields):
+                if col < 0 or col >= len(field_names):
                     raise ValueError(
                         f"{ERROR_PREFIX} bias column {col+1} is out of range"
                     )
-                names.append(fields[col + 2])
+                names.append(field_names[col])
         except ValueError:
             columns = []
             names = []
             if bias_spec == ".bias":
-                for pos, field in enumerate(fields):
+                for pos, field in enumerate(field_names):
                     if field.find(".bias") != -1 or field.find(".rbias") != -1:
-                        columns.append(pos - 2)
+                        columns.append(pos)
                         names.append(field)
             else:
                 for token in tokens:
                     found = False
-                    for pos, field in enumerate(fields):
+                    for pos, field in enumerate(field_names):
                         if field == token:
-                            columns.append(pos - 2)
+                            columns.append(pos)
                             names.append(field)
                             found = True
                             break

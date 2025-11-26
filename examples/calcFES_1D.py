@@ -6,7 +6,7 @@ Example script demonstrating how to use the FESutils library to calculate FES fr
 
 import os
 from FESutils.fes_config import FESConfig
-from FESutils.api import calculate_fes
+from FESutils.colvar_api import calculate_fes
 from functools import partial
 
 def main():
