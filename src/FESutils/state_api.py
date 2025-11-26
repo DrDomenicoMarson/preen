@@ -24,20 +24,20 @@ def calculate_fes_from_state(config: FESStateConfig):
     """
     if not isinstance(config, FESStateConfig):
         raise TypeError("calculate_fes_from_state expects an FESStateConfig")
-    if config.filename is None:
-        raise ValueError("filename is required for STATE-based FES calculation")
+    if config.input_file is None:
+        raise ValueError("input_file is required for STATE-based FES calculation")
 
     set_num_threads(config.num_threads)
-    data = _read_state_file(config.filename)
-    blocks = _find_field_blocks(data, config.filename)
+    data = _read_state_file(config.input_file)
+    blocks = _find_field_blocks(data, config.input_file)
     output_conv = energy_conversion_factor("kJ/mol", config.output_energy_unit)
 
     for idx, (start, end) in enumerate(blocks, start=1):
         total_states = len(blocks)
         print(f"   working... state {idx}/{total_states}", end="\r")
-        header, meta, header_end = _parse_state_header(data, start, config.filename)
+        header, meta, header_end = _parse_state_header(data, start, config.input_file)
         meta, data_start = _parse_periodicity(data, header_end, end, header, meta)
-        kernels = _extract_kernels(data, data_start, end, meta.dim2, config.filename)
+        kernels = _extract_kernels(data, data_start, end, meta.dim2, config.input_file)
         grid = _build_grid_from_state(config, meta, kernels)
         grid_state, stats = _evaluate_state_fes(config, meta, kernels, grid)
         _write_state_outputs(config, meta, grid_state, stats, grid.mesh, output_conv)

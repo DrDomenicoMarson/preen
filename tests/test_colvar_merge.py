@@ -186,7 +186,7 @@ def test_load_colvar_with_merge_result_matches(tmp_path):
     result = merge_colvar_files(base_dir=d, build_dataframe=True)
     outfile = tmp_path / "fes.dat"
     config = FESConfig(
-        filename="MERGED_IN_MEMORY",
+        input_file=None,
         outfile=str(outfile),
         kbt=300.0 * KB_KJ_MOL,
         grid_bin=(5,),

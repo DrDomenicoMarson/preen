@@ -17,7 +17,7 @@ def main():
     state_file = os.path.join(example_data_dir, 'KERNELSforRST')
 
     config = FESStateConfig(
-        filename=state_file,
+        input_file=state_file,
         outfile=os.path.join(output_dir, 'fes-state.dat'),
         temp=300.0,
         grid_bin=(100, 100),

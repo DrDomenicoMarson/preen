@@ -13,7 +13,6 @@ Adjust `basenames`, `cv_columns`, and `bias_spec` to match your data.
 from pathlib import Path
 
 from FESutils import FESConfig, calculate_fes, merge_multiple_colvar_files
-from FESutils.constants import KB_KJ_MOL
 
 
 def main():
@@ -39,9 +38,8 @@ def main():
 
     # Configure reweighting; supply sigma/grid settings for your system
     config = FESConfig(
-        filename=None,
         outfile="fes_multi.dat",
-        kbt=300.0 * KB_KJ_MOL,
+        temp=300.0,
         grid_bin=(100,),
         sigma=(0.05,),
         cv_spec=cv_columns,

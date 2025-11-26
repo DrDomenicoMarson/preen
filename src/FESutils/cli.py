@@ -459,7 +459,7 @@ def _handle_colvar_reweight(args):
         print(f"Using bias spec: {bias_display}")
 
     config = FESConfig(
-        filename="MERGED_IN_MEMORY",
+        input_file=None,
         outfile=args.output,
         kbt=args.kbt if args.kbt is not None else None,
         temp=None if args.kbt is not None else args.temp,
@@ -496,7 +496,7 @@ def _handle_fes_from_state(args):
     grid_max_tuple = _parse_values(args.grid_max, float) if args.grid_max else None
 
     config = FESStateConfig(
-        filename=args.filename,
+        input_file=args.filename,
         outfile=args.outfile,
         kbt=args.kbt if args.kbt is not None else None,
         temp=None if args.kbt is not None else args.temp,
