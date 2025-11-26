@@ -475,7 +475,7 @@ def merge_multiple_colvar_files(
     for rk in run_keys:
         per_files = [runs[rk][b] for b in basenames]
         per_dfs: list[pd.DataFrame] = []
-        row_len: int | None = None
+        row_lengths: list[int] = []
 
         for path in per_files:
             res = read_colvar_dataframe(path, expected_fields=None, discard_fraction=discard_fraction)
@@ -484,14 +484,23 @@ def merge_multiple_colvar_files(
             hdr, fields, df = res
             if header_lines_ref is None:
                 header_lines_ref = hdr
-            if row_len is None:
-                row_len = len(df)
-            elif len(df) != row_len:
-                raise ValueError(
-                    f"Row count mismatch in run '{rk}': expected {row_len} rows, got {len(df)} in {path}"
-                )
+            row_lengths.append(len(df))
             per_dfs.append(df)
             source_files.append(path)
+
+        if not per_dfs:
+            continue
+        min_len = min(row_lengths)
+        max_len = max(row_lengths)
+        if max_len != min_len:
+            if verbose:
+                warnings.warn(
+                    f"Row count mismatch in run '{rk}': trimming all to {min_len} rows (min of {row_lengths})",
+                    stacklevel=2,
+                )
+            per_dfs = [df.iloc[:min_len].reset_index(drop=True) for df in per_dfs]
+        else:
+            per_dfs = [df.reset_index(drop=True) for df in per_dfs]
 
         combined = per_dfs[0].copy(deep=False)
         for idx in range(1, len(per_dfs)):
@@ -536,6 +545,82 @@ def merge_multiple_colvar_files(
     return MergeResult(
         dataframe=merged_df,
         fields=combined_fields,
+        header_lines=header_lines,
+        source_files=source_files,
+        time_column=time_col,
+        row_count=len(merged_df),
+        raw_lines=None,
+    )
+
+
+def merge_runs_multiple_colvar_files(
+    run_dirs: Sequence[str | Path],
+    basenames: Sequence[str],
+    discard_fractions: float | Sequence[float] = 0.1,
+    time_ordered: bool = True,
+    verbose: bool = True,
+    allow_header_mismatch: bool = False,
+    requested_columns: Sequence[str] | None = None,
+) -> MergeResult:
+    """
+    Merge multiple basenames across multiple run directories (e.g., run_1 and run_2).
+
+    - `run_dirs`: list of directories containing walker subdirs/files for each run.
+    - `basenames`: basenames to merge per run (e.g., ["COLVAR", "CV_DIHEDRALS"]).
+    - `discard_fractions`: single float for all runs or per-run list matching run_dirs.
+    - `time_ordered`: interleave rows across runs by index (handles differing lengths).
+    - `requested_columns`: optional subset of columns to keep.
+    """
+    if not run_dirs:
+        raise ValueError("At least one run directory must be provided")
+    if not basenames:
+        raise ValueError("At least one basename must be provided")
+
+    if isinstance(discard_fractions, (int, float)):
+        discards = [float(discard_fractions)] * len(run_dirs)
+    else:
+        discards = list(discard_fractions)
+        if len(discards) != len(run_dirs):
+            raise ValueError("discard_fractions must be a single value or match run_dirs length")
+
+    run_results: list[MergeResult] = []
+    for run_dir, disc in zip(run_dirs, discards):
+        if verbose:
+            print(f"Merging run at {run_dir} (discard_fraction={disc})")
+        result = merge_multiple_colvar_files(
+            base_dir=run_dir,
+            basenames=basenames,
+            discard_fraction=disc,
+            time_ordered=time_ordered,
+            verbose=verbose,
+            allow_header_mismatch=allow_header_mismatch,
+            requested_columns=requested_columns,
+        )
+        run_results.append(result)
+
+    ref_fields = run_results[0].fields
+    for res in run_results[1:]:
+        if list(res.fields) != list(ref_fields):
+            raise ValueError("Merged runs have differing fields; ensure basenames/columns align.")
+
+    frames = [res.dataframe.reset_index(drop=True) for res in run_results]
+    merged_df = _merge_run_frames(frames, time_ordered=time_ordered, columns=list(ref_fields))
+    time_col = "time" if "time" in merged_df.columns else (merged_df.columns[0] if time_ordered else None)
+
+    header_lines = []
+    fields_line = "#! FIELDS " + " ".join(ref_fields)
+    header_lines.append(fields_line if fields_line.endswith("\n") else f"{fields_line}\n")
+    if run_results[0].header_lines:
+        for line in run_results[0].header_lines[1:]:
+            header_lines.append(line if line.endswith("\n") else f"{line}\n")
+
+    source_files: list[Path] = []
+    for res in run_results:
+        source_files.extend(res.source_files)
+
+    return MergeResult(
+        dataframe=merged_df,
+        fields=list(ref_fields),
         header_lines=header_lines,
         source_files=source_files,
         time_column=time_col,
