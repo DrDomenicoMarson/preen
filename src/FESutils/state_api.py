@@ -24,6 +24,8 @@ def calculate_fes_from_state(config: FESStateConfig):
     """
     if not isinstance(config, FESStateConfig):
         raise TypeError("calculate_fes_from_state expects an FESStateConfig")
+    if config.filename is None:
+        raise ValueError("filename is required for STATE-based FES calculation")
 
     set_num_threads(config.num_threads)
     data = _read_state_file(config.filename)

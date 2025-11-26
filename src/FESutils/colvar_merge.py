@@ -7,6 +7,7 @@ from __future__ import annotations
 from dataclasses import dataclass
 from pathlib import Path
 import re
+import warnings
 from typing import Sequence
 
 import numpy as np
@@ -430,7 +431,14 @@ def merge_multiple_colvar_files(
     base = Path(base_dir)
     if not base.exists():
         raise FileNotFoundError(f"Base directory not found: {base_dir}")
+    seen: set[str] = set()
+    duplicates = [b for b in basenames if b in seen or seen.add(b)]
     basenames = list(dict.fromkeys(basenames))
+    if duplicates:
+        warnings.warn(
+            f"Duplicate basenames provided ({', '.join(duplicates)}); using unique order: {', '.join(basenames)}",
+            stacklevel=2,
+        )
 
     runs: dict[Path, dict[str, Path]] = {}
     for bname in basenames:

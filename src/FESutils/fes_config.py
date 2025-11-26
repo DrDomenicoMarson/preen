@@ -8,8 +8,8 @@ from FESutils.constants import KB_KJ_MOL, normalize_energy_unit
 class BaseFESConfig:
     """Common configuration for FES calculations."""
 
-    filename: str
     outfile: str
+    filename: str | None = None
     kbt: None | float = None
     temp: None | float = None
     grid_min: None | tuple[float, ...] = None
@@ -24,6 +24,11 @@ class BaseFESConfig:
     input_energy_unit: str = "kJ/mol"
     output_energy_unit: str = "kJ/mol"
     num_threads: int | None = None
+
+    @property
+    def input_file(self) -> str | None:
+        """Alias for filename (more descriptive for inputs)."""
+        return self.filename
 
     def __post_init__(self):
         if self.kbt is None:

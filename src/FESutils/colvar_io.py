@@ -54,6 +54,8 @@ def load_colvar_data(config: FESConfig, merge_result=None) -> ColvarData:
     from .colvar_merge import MergeResult
 
     if merge_result is None:
+        if config.filename is None:
+            raise ValueError("filename must be provided when merge_result is None")
         with open_text_file(config.filename) as f:
             header_tokens = f.readline().split()
             if len(header_tokens) < 2 or header_tokens[1] != "FIELDS":
