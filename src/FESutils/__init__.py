@@ -5,6 +5,7 @@ from .colvar_merge import (
     read_colvar_dataframe,
     merge_colvar_lines,
     build_dataframe_from_lines,
+    merge_multiple_colvar_files,
 )
 from .colvar_plot import plot_colvar_timeseries
 from .colvar_api import calculate_fes

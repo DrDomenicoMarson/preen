@@ -262,6 +262,35 @@ def merge_colvar_lines(
     )
 
 
+def _merge_run_frames(frames: list[pd.DataFrame], time_ordered: bool, columns: Sequence[str]) -> pd.DataFrame:
+    """
+    Combine per-run dataframes into a single dataframe following the time_ordered
+    semantics used by merge_colvar_files (interleave rows across runs by index).
+    """
+    if not frames:
+        return pd.DataFrame(columns=columns)
+    reset_frames = [df.reset_index(drop=True) for df in frames]
+    if not time_ordered:
+        return pd.concat(reset_frames, axis=0, ignore_index=True, copy=False)
+
+    lengths = [len(df) for df in reset_frames]
+    max_len = max(lengths)
+    if len(set(lengths)) == 1:
+        # Fast path: same length -> vectorized interleave
+        arrs = [df.to_numpy() for df in reset_frames]
+        stacked = np.stack(arrs, axis=1)  # shape: (rows, runs, cols)
+        interleaved = stacked.reshape(-1, stacked.shape[-1])
+        return pd.DataFrame(interleaved, columns=columns)
+
+    # Fallback: differing lengths; preserve order row-by-row
+    rows = []
+    for idx in range(max_len):
+        for df in reset_frames:
+            if idx < len(df):
+                rows.append(df.iloc[idx].to_numpy())
+    return pd.DataFrame(rows, columns=columns)
+
+
 def build_dataframe_from_lines(
     lines: list[str],
     fields: Sequence[str],
@@ -376,6 +405,134 @@ def merge_colvar_files(
         time_column=time_col,
         row_count=text_result.row_count,
         raw_lines=text_result.lines,
+    )
+
+
+def merge_multiple_colvar_files(
+    base_dir: str | Path,
+    basenames: Sequence[str],
+    discard_fraction: float = 0.1,
+    time_ordered: bool = True,
+    verbose: bool = True,
+    allow_header_mismatch: bool = False,
+    requested_columns: Sequence[str] | None = None,
+) -> MergeResult:
+    """
+    Merge data from multiple COLVAR-like basenames per run (e.g., COLVAR and CV_DIHEDRALS).
+
+    - Files are grouped by their parent directory relative to base_dir.
+    - Each run must contain exactly one file for each requested basename.
+    - Within a run, dataframes are aligned by row index; overlapping columns must match.
+    - The resulting dataframe contains the union of columns (or requested_columns subset).
+    """
+    if not basenames:
+        raise ValueError("At least one basename must be provided")
+    base = Path(base_dir)
+    if not base.exists():
+        raise FileNotFoundError(f"Base directory not found: {base_dir}")
+    basenames = list(dict.fromkeys(basenames))
+
+    runs: dict[Path, dict[str, Path]] = {}
+    for bname in basenames:
+        files = discover_colvar_files(base, basename=bname)
+        if not files:
+            raise FileNotFoundError(f"No COLVAR files matching '{bname}' found in {base_dir}")
+        for path in files:
+            try:
+                run_key = path.parent.resolve().relative_to(base.resolve())
+            except ValueError:
+                run_key = path.parent.resolve()
+            run = runs.setdefault(run_key, {})
+            if bname in run:
+                raise ValueError(
+                    f"Multiple files for basename '{bname}' in run '{run_key}': {run[bname]} and {path}"
+                )
+            run[bname] = path
+
+    missing_runs = {
+        rk: [b for b in basenames if b not in files] for rk, files in runs.items() if len(files) != len(basenames)
+    }
+    if missing_runs:
+        msgs = []
+        for rk, missing in missing_runs.items():
+            msgs.append(f"{rk}: missing {', '.join(missing)}")
+        raise FileNotFoundError("Missing basenames in runs: " + "; ".join(msgs))
+
+    run_keys = sorted(runs.keys(), key=_natural_key)
+    combined_frames: list[pd.DataFrame] = []
+    source_files: list[Path] = []
+    header_lines_ref: list[str] | None = None
+    combined_fields: list[str] | None = None
+
+    for rk in run_keys:
+        per_files = [runs[rk][b] for b in basenames]
+        per_dfs: list[pd.DataFrame] = []
+        row_len: int | None = None
+
+        for path in per_files:
+            res = read_colvar_dataframe(path, expected_fields=None, discard_fraction=discard_fraction)
+            if res is None:
+                raise RuntimeError(f"Failed to read COLVAR data from {path}")
+            hdr, fields, df = res
+            if header_lines_ref is None:
+                header_lines_ref = hdr
+            if row_len is None:
+                row_len = len(df)
+            elif len(df) != row_len:
+                raise ValueError(
+                    f"Row count mismatch in run '{rk}': expected {row_len} rows, got {len(df)} in {path}"
+                )
+            per_dfs.append(df)
+            source_files.append(path)
+
+        combined = per_dfs[0].copy(deep=False)
+        for idx in range(1, len(per_dfs)):
+            other = per_dfs[idx]
+            overlap = [c for c in other.columns if c in combined.columns]
+            for col in overlap:
+                if not np.array_equal(combined[col].to_numpy(), other[col].to_numpy()):
+                    raise ValueError(
+                        f"Column '{col}' differs between files in run '{rk}'. Cannot merge basenames."
+                    )
+            new_cols = [c for c in other.columns if c not in combined.columns]
+            if new_cols:
+                combined = pd.concat([combined, other[new_cols]], axis=1, copy=False)
+
+        if requested_columns is not None:
+            missing = [c for c in requested_columns if c not in combined.columns]
+            if missing:
+                available_str = ", ".join(combined.columns)
+                raise ValueError(
+                    f"Requested columns not found after merge: {', '.join(missing)}. Available columns: {available_str}"
+                )
+            combined = combined[list(requested_columns)]
+
+        combined_frames.append(combined)
+        if combined_fields is None:
+            combined_fields = list(combined.columns)
+
+    if not combined_frames:
+        raise RuntimeError("No data merged from provided basenames")
+
+    assert combined_fields is not None
+    merged_df = _merge_run_frames(combined_frames, time_ordered=time_ordered, columns=combined_fields)
+    time_col = "time" if "time" in merged_df.columns else (merged_df.columns[0] if time_ordered else None)
+
+    header_lines = []
+    fields_line = "#! FIELDS " + " ".join(combined_fields)
+    header_lines.append(fields_line if fields_line.endswith("\n") else f"{fields_line}\n")
+    if header_lines_ref:
+        for line in header_lines_ref[1:]:
+            header_lines.append(line if line.endswith("\n") else f"{line}\n")
+
+    return MergeResult(
+        dataframe=merged_df,
+        fields=combined_fields,
+        header_lines=header_lines,
+        source_files=source_files,
+        time_column=time_col,
+        row_count=len(merged_df),
+        raw_lines=None,
     )
 
 
