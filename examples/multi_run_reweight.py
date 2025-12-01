@@ -13,7 +13,7 @@ def main():
     merged = merge_runs_multiple_colvar_files(
         run_dirs=[Path("big_data/run_1"), Path("big_data/run_2")],
         basenames=["COLVAR"], # "CV_DIHEDRALS"
-        discard_fractions=[0.4, 0.02],
+        discard_fractions=[0.7, 0.02],
         time_ordered=True,
         requested_columns=requested_columns,
         verbose=True,
@@ -23,7 +23,7 @@ def main():
         input_file=None,
         outfile="fes_multi_run.dat",
         kbt=300.0 * KB_KJ_MOL,
-        grid_bin=(100, 90),
+        grid_bin=(180, 90),
         sigma=(0.05, 5),
         cv_spec=cv_columns,
         bias_spec=bias_spec,
