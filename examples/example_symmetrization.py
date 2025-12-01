@@ -109,6 +109,6 @@ if __name__ == "__main__":
     run_1d_symmetrization()
     run_2d_symmetrization()
     
-    # Cleanup
-    if os.path.exists("example_sym_data.dat"):
-        os.remove("example_sym_data.dat")
+    # # Cleanup
+    # if os.path.exists("example_sym_data.dat"):
+    #     os.remove("example_sym_data.dat")

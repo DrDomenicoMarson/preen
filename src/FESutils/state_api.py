@@ -7,7 +7,7 @@ from .constants import ERROR_PREFIX, energy_conversion_factor
 from .colvar_io import open_text_file
 from .fes_config import FESStateConfig
 from .grid import GridAxis, GridData
-from .fes_state import create_grid_runtime_state
+from .fes_state import create_grid_runtime_state, symmetrize_grid_state
 from .kernel_eval import (
     _numba_calc_prob_1d,
     _numba_calc_der_prob_1d,
@@ -40,7 +40,12 @@ def calculate_fes_from_state(config: FESStateConfig):
         kernels = _extract_kernels(data, data_start, end, meta.dim2, config.input_file, config, meta)
         grid = _build_grid_from_state(config, meta, kernels)
         grid_state, stats = _evaluate_state_fes(config, meta, kernels, grid)
-        _write_state_outputs(config, meta, grid_state, stats, grid.mesh, output_conv)
+        
+        # Symmetrize grid state if needed
+        if config.symmetrize_cvs:
+            grid_state = symmetrize_grid_state(grid_state, config.symmetrize_cvs)
+            
+        _write_state_outputs(config, meta, grid_state, stats, grid_state.mesh, output_conv)
     print("Done.")
 
 

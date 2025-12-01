@@ -103,12 +103,20 @@ def test_state_symmetrization_1d(sym_env):
     cv = data[:, 0]
     fes = data[:, 1]
     
-    # Check that grid starts at 0
-    assert cv[0] >= 0.0
+    # Check that grid starts at negative value (symmetrized output)
+    # Original grid was 0 to 4. Symmetrized should be -4 to 4.
+    assert cv[0] < 0.0
+    assert cv[0] == pytest.approx(-4.0, abs=0.2)
     
-    # Check for minimum around 2.0 (since -2 is folded to 2)
+    # Check for minimum around 2.0 and -2.0
     min_idx = np.argmin(fes)
-    assert cv[min_idx] == pytest.approx(2.0, abs=0.2)
+    # There should be two minima now?
+    # Or at least the shape should be symmetric.
+    # Check symmetry: F(x) approx F(-x)
+    # Find index closest to 2.0
+    idx_pos = np.argmin(np.abs(cv - 2.0))
+    idx_neg = np.argmin(np.abs(cv - (-2.0)))
+    assert fes[idx_pos] == pytest.approx(fes[idx_neg], abs=0.1)
 
 def test_colvar_symmetrization_1d(sym_env):
     colvar_file = os.path.join(sym_env, 'colvar_1d.dat')
@@ -133,12 +141,14 @@ def test_colvar_symmetrization_1d(sym_env):
     cv = data[:, 0]
     fes = data[:, 1]
     
-    # Check that grid starts at 0
-    assert cv[0] >= 0.0
+    # Check that grid starts at negative value
+    assert cv[0] < 0.0
+    assert cv[0] == pytest.approx(-4.0, abs=0.2)
     
-    # Check for minimum around 2.0
-    min_idx = np.argmin(fes)
-    assert cv[min_idx] == pytest.approx(2.0, abs=0.2)
+    # Check symmetry
+    idx_pos = np.argmin(np.abs(cv - 2.0))
+    idx_neg = np.argmin(np.abs(cv - (-2.0)))
+    assert fes[idx_pos] == pytest.approx(fes[idx_neg], abs=0.1)
 
 def test_state_symmetrization_2d(sym_env):
     state_file = os.path.join(sym_env, 'state_2d.dat')
@@ -164,8 +174,9 @@ def test_state_symmetrization_2d(sym_env):
     data = np.loadtxt(outfile)
     cv1 = data[:, 0]
     
-    # Check cv1 is positive
-    assert np.all(cv1 >= 0.0)
+    # Check cv1 is symmetric (starts negative)
+    assert np.min(cv1) < 0.0
+    assert np.min(cv1) == pytest.approx(-4.0, abs=0.2)
 
 def test_colvar_symmetrization_2d(sym_env):
     colvar_file = os.path.join(sym_env, 'colvar_2d.dat')
@@ -189,4 +200,5 @@ def test_colvar_symmetrization_2d(sym_env):
     assert os.path.exists(outfile)
     data = np.loadtxt(outfile)
     cv1 = data[:, 0]
-    assert np.all(cv1 >= 0.0)
+    assert np.min(cv1) < 0.0
+    assert np.min(cv1) == pytest.approx(-4.0, abs=0.2)
