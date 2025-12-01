@@ -171,6 +171,31 @@ def test_written_merge_preserves_fields_header(tmp_path):
     assert first_line.startswith("#! FIELDS")
 
 
+def test_concat_merge_writes_data_once(tmp_path):
+    d = tmp_path / "run"
+    d.mkdir()
+    _write_colvar(
+        d / "COLVAR",
+        [
+            "0 0.0 0.1",
+            "1 0.1 0.2",
+        ],
+    )
+    _write_colvar(
+        d / "COLVAR.1",
+        [
+            "0 0.5 0.6",
+            "1 0.6 0.7",
+        ],
+    )
+    out_path = tmp_path / "merged_concat.dat"
+    result = merge_colvar_files(base_dir=d, time_ordered=False, output_path=out_path)
+    assert out_path.exists()
+    with open(out_path, "r", encoding="utf-8") as f:
+        data_lines = [line for line in f if line.strip() and not line.startswith("#")]
+    assert len(data_lines) == result.row_count == 4
+
+
 def test_load_colvar_with_merge_result_matches(tmp_path):
     # Prepare a simple COLVAR file
     d = tmp_path / "run"

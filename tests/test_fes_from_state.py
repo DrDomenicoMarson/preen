@@ -78,3 +78,51 @@ def test_run_kernels_for_rst(state_env):
     fes_col = 1
     min_fes = np.min(data[:, fes_col])
     assert min_fes == pytest.approx(0.0, abs=1e-4)
+
+
+def _write_simple_state_2d(path):
+    """Write a minimal 2D STATE file that supports derivative evaluation."""
+    lines = [
+        "#! FIELDS time cv1 cv2 sigma_cv1 sigma_cv2 height",
+        "#! SET action OPES_METAD_state",
+        "#! SET biasfactor 10.0",
+        "#! SET epsilon 1.0",
+        "#! SET kernel_cutoff 6.25",
+        "#! SET compression_threshold 1",
+        "#! SET zed 1.0",
+        "#! SET sum_weights 1.0",
+        "#! SET ignored 0",
+        "#! SET ignored 0",
+        "#! SET min_cv1 -4.0",
+        "#! SET max_cv1 4.0",
+        "#! SET min_cv2 -1.0",
+        "#! SET max_cv2 1.0",
+        # time  cv1  cv2  sigma1 sigma2 height
+        "1.0 -1.0 0.0 0.2 0.3 1.0",
+        "2.0  1.0 0.0 0.2 0.3 1.0",
+    ]
+    with open(path, "w", encoding="utf-8") as f:
+        f.write("\n".join(lines))
+
+
+def test_state_derivatives_2d(tmp_path):
+    """Ensure 2D STATE derivative computation runs and writes derivative columns."""
+    state_file = tmp_path / "state_2d.dat"
+    _write_simple_state_2d(state_file)
+    outfile = tmp_path / "fes_state_der.dat"
+    config = FESStateConfig(
+        input_file=str(state_file),
+        outfile=str(outfile),
+        temp=300.0,
+        grid_bin=(10, 10),
+        calc_der=True,
+        backup=False,
+        plot=False,
+    )
+
+    calculate_fes_from_state(config)
+
+    assert outfile.exists()
+    data = np.loadtxt(outfile)
+    # Columns: cv1, cv2, fes, der_cv1, der_cv2
+    assert data.shape[1] == 5

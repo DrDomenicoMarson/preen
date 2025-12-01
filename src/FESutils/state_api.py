@@ -349,6 +349,7 @@ def _evaluate_state_fes(config: FESStateConfig, meta: _StateMeta, kernels, grid:
                 center_y,
                 sigma_x,
                 sigma_y,
+                height,
                 meta.period_x,
                 meta.period_y,
                 meta.val_at_cutoff,
