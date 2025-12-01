@@ -60,6 +60,10 @@ def calculate_fes(config: FESConfig, merge_result=None):
             print(f"   symmetrizing {name_cv_y} (taking absolute value)")
             cv_y = np.abs(cv_y)
             samples.cv_y = cv_y
+            
+        for name in config.symmetrize_cvs:
+            if name != name_cv_x and (not dim2 or name != name_cv_y):
+                print(f" +++ WARNING: CV '{name}' specified in symmetrize_cvs but not found in data +++")
     kbt = config.kbt
     fmt = config.fmt
     calc_der = config.calc_der

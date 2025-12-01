@@ -184,6 +184,10 @@ def _extract_kernels(data: np.ndarray, start: int, end: int, dim2: bool, filenam
         if meta.name_cv_x in config.symmetrize_cvs:
             print(f"   symmetrizing {meta.name_cv_x} (taking absolute value)")
             center_x = np.abs(center_x)
+            
+        for name in config.symmetrize_cvs:
+            if name != meta.name_cv_x and (not dim2 or name != meta.name_cv_y):
+                print(f" +++ WARNING: CV '{name}' specified in symmetrize_cvs but not found in state file +++")
 
     if dim2:
         center_y = np.array(chunk[:, 2], dtype=float)
