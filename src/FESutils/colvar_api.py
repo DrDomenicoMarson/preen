@@ -41,12 +41,25 @@ def calculate_fes(config: FESConfig, merge_result=None):
     len_tot = samples.len_tot
     name_cv_x = samples.name_cv_x
     name_cv_y = samples.name_cv_y if samples.name_cv_y is not None else ""
-    cv_x = samples.cv_x
-    cv_y = samples.cv_y
     bias = samples.bias
     dim2 = samples.dim2
     sigma_x = config.sigma[0]
     sigma_y = config.sigma[1] if dim2 else None
+
+    cv_x = samples.cv_x
+    cv_y = samples.cv_y
+
+    # Symmetrization logic
+    if config.symmetrize_cvs:
+        if name_cv_x in config.symmetrize_cvs:
+            print(f"   symmetrizing {name_cv_x} (taking absolute value)")
+            cv_x = np.abs(cv_x)
+            samples.cv_x = cv_x
+        
+        if dim2 and name_cv_y in config.symmetrize_cvs:
+            print(f"   symmetrizing {name_cv_y} (taking absolute value)")
+            cv_y = np.abs(cv_y)
+            samples.cv_y = cv_y
     kbt = config.kbt
     fmt = config.fmt
     calc_der = config.calc_der

@@ -23,6 +23,7 @@ class BaseFESConfig:
     backup: bool = False
     input_energy_unit: str = "kJ/mol"
     output_energy_unit: str = "kJ/mol"
+    symmetrize_cvs: list[str] | None = None
     num_threads: int | None = None
 
     def __post_init__(self):

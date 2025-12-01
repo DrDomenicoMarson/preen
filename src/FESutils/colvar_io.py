@@ -116,6 +116,8 @@ def load_colvar_data(config: FESConfig, merge_result=None) -> ColvarData:
         values = np.ascontiguousarray(
             np.array(sub_data.iloc[:, col_map[info.column]], dtype=float)
         )
+        if config.symmetrize_cvs and info.name in config.symmetrize_cvs:
+             values = np.abs(values)
         cv_arrays.append(values)
     bias = np.zeros(len(cv_arrays[0]))
     for col in metadata.bias.columns:
