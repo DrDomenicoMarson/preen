@@ -15,7 +15,7 @@ def main():
     output_dir = os.path.join(base_dir, 'output')
 
     PartConfig = partial(FESConfig,
-                         filename=os.path.join(example_data_dir, 'COLVAR_merged.tgz'),
+                        input_file=os.path.join(example_data_dir, 'COLVAR_merged.tgz'),
                          temp=300.0, plot=True, backup=False, bias_spec='opes.bias',
                          sigma=(0.05, ),
                          cv_spec=('dT.z', ),

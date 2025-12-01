@@ -54,10 +54,12 @@ def load_colvar_data(config: FESConfig, merge_result=None) -> ColvarData:
     from .colvar_merge import MergeResult
 
     if merge_result is None:
-        with open_text_file(config.filename) as f:
+        if config.input_file is None:
+            raise ValueError("input_file must be provided when merge_result is None")
+        with open_text_file(config.input_file) as f:
             header_tokens = f.readline().split()
             if len(header_tokens) < 2 or header_tokens[1] != "FIELDS":
-                raise ValueError(f'{ERROR_PREFIX} no FIELDS found in "{config.filename}"')
+                raise ValueError(f'{ERROR_PREFIX} no FIELDS found in "{config.input_file}"')
             field_names = header_tokens[2:]
             cv_infos = _resolve_cv_infos(field_names, config.cv_spec)
             bias_info = _resolve_bias_info(field_names, config.bias_spec)
@@ -68,7 +70,7 @@ def load_colvar_data(config: FESConfig, merge_result=None) -> ColvarData:
         skip_rows = metadata.header_lines + config.skiprows
         required_cols = [info.column for info in metadata.cvs] + metadata.bias.columns
         required_cols = sorted(set(required_cols))
-        with open_text_file(config.filename) as f_data:
+        with open_text_file(config.input_file) as f_data:
             data = pd.read_table(
                 f_data,
                 dtype=float,

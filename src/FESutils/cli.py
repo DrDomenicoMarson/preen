@@ -427,6 +427,14 @@ def _handle_colvar_reweight(args):
         )
 
     verbose = not args.quiet
+    # Build only the columns needed for reweighting when possible
+    required_columns = set(columns)
+    bias_tokens = [tok.strip() for tok in str(args.bias_spec).split(",") if tok.strip()]
+    bias_all_numeric = all(tok.isdigit() for tok in bias_tokens) if bias_tokens else False
+    if not bias_all_numeric and args.bias_spec.lower() != "no":
+        required_columns.update(bias_tokens)
+    requested_columns = tuple(required_columns) if not bias_all_numeric else None
+
     merge_result = merge_colvar_files(
         base_dir=args.base_dir,
         basename=args.basename,
@@ -435,6 +443,7 @@ def _handle_colvar_reweight(args):
         output_path=None,
         verbose=verbose,
         build_dataframe=True,
+        requested_columns=requested_columns,
     )
     available_fields = list(merge_result.fields)
     missing = [c for c in columns if c not in available_fields]
@@ -450,7 +459,7 @@ def _handle_colvar_reweight(args):
         print(f"Using bias spec: {bias_display}")
 
     config = FESConfig(
-        filename="MERGED_IN_MEMORY",
+        input_file=None,
         outfile=args.output,
         kbt=args.kbt if args.kbt is not None else None,
         temp=None if args.kbt is not None else args.temp,
@@ -487,7 +496,7 @@ def _handle_fes_from_state(args):
     grid_max_tuple = _parse_values(args.grid_max, float) if args.grid_max else None
 
     config = FESStateConfig(
-        filename=args.filename,
+        input_file=args.filename,
         outfile=args.outfile,
         kbt=args.kbt if args.kbt is not None else None,
         temp=None if args.kbt is not None else args.temp,

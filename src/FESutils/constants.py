@@ -1,7 +1,10 @@
 """Constants for FES reweighting scripts."""
 
+from math import pi
 KB_KJ_MOL = 0.0083144621
 ERROR_PREFIX = "--- ERROR:"
+
+DEG2RAD = pi / 180.0
 
 # Energy unit handling
 _ENERGY_UNITS = {

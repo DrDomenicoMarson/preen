@@ -8,8 +8,8 @@ from FESutils.constants import KB_KJ_MOL, normalize_energy_unit
 class BaseFESConfig:
     """Common configuration for FES calculations."""
 
-    filename: str
     outfile: str
+    input_file: str | None = None
     kbt: None | float = None
     temp: None | float = None
     grid_min: None | tuple[float, ...] = None

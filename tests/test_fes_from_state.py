@@ -39,7 +39,7 @@ def test_run_kernels_for_rst(state_env):
         pytest.skip(f"KERNELSforRST not found at {state_env['kernels_file']}")
 
     config = FESStateConfig(
-        filename=state_env['kernels_file'],
+        input_file=state_env['kernels_file'],
         outfile=state_env['outfile'],
         temp=300.0,
         grid_bin=(100, 100),

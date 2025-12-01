@@ -67,7 +67,7 @@ def test_1_dZ(regression_env):
     """Test 1: 1D FES for dT.z"""
     outfile = os.path.join(regression_env['test_output_dir'], 'dZ.dat')
     config = FESConfig(
-        filename=regression_env['colvar_file'],
+        input_file=regression_env['colvar_file'],
         outfile=outfile,
         temp=300.0,
         grid_bin=(100,),
@@ -83,7 +83,7 @@ def test_2_dZ_16block(regression_env):
     """Test 2: 1D FES with blocks"""
     outfile = os.path.join(regression_env['test_output_dir'], 'dZ_16block.dat')
     config = FESConfig(
-        filename=regression_env['colvar_file'],
+        input_file=regression_env['colvar_file'],
         outfile=outfile,
         kbt=300.0 * KB_KJ_MOL,
         grid_bin=(100,),
@@ -104,7 +104,7 @@ def test_3_dZ_stride(regression_env):
     """Test 3: 1D FES with stride"""
     outfile = os.path.join(regression_env['test_output_dir'], 'dZ_500000stride.dat')
     config = FESConfig(
-        filename=regression_env['colvar_file'],
+        input_file=regression_env['colvar_file'],
         outfile=outfile,
         kbt=300.0 * KB_KJ_MOL,
         grid_bin=(100,),
@@ -126,7 +126,7 @@ def test_4_2D_simple(regression_env):
     """Test 6: Simple 2D FES execution (no blocks/stride)"""
     outfile = os.path.join(regression_env['test_output_dir'], '2D_simple.dat')
     config = FESConfig(
-        filename=regression_env['colvar_file'],
+        input_file=regression_env['colvar_file'],
         outfile=outfile,
         kbt=300.0 * KB_KJ_MOL,
         grid_bin=(50, 50),

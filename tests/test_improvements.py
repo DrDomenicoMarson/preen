@@ -68,7 +68,7 @@ def test_config_validation(backup_env):
     
     outfile = str(backup_env['test_dir'] / 'out.dat')
     config = FESConfig(
-        filename=backup_env['colvar_file'],
+        input_file=backup_env['colvar_file'],
         outfile=outfile,
         kbt=300.0 * KB_KJ_MOL,
         grid_bin=(10,),
@@ -87,7 +87,7 @@ def test_no_backup_option(backup_env):
     outfile_str = str(outfile)
     
     config = FESConfig(
-        filename=backup_env['colvar_file'],
+        input_file=backup_env['colvar_file'],
         outfile=outfile_str,
         kbt=300.0 * KB_KJ_MOL,
         grid_bin=(10,),
