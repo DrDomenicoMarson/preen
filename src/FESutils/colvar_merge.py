@@ -380,23 +380,28 @@ def merge_colvar_files(
     """
     if not (0.0 <= discard_fraction <= 1.0):
         raise ValueError("discard_fraction must be between 0.0 and 1.0")
+    streaming_merge = output_path is not None and (not time_ordered) and (not build_dataframe)
     text_result = merge_colvar_lines(
         base_dir=base_dir,
         basename=basename,
         discard_fraction=discard_fraction,
         time_ordered=time_ordered,
-        output_path=output_path,
+        output_path=output_path if streaming_merge else None,
         verbose=verbose,
         allow_header_mismatch=allow_header_mismatch,
     )
 
     if not build_dataframe:
         if output_path:
-            if verbose:
-                print("Writing merged COLVAR...", end="\r", flush=True)
-            _write_colvar(Path(output_path), text_result.header_lines, text_result.lines)
-            if verbose:
-                print(f"Wrote merged COLVAR to {output_path}          ")
+            if streaming_merge:
+                if verbose:
+                    print(f"Wrote merged COLVAR to {output_path}")
+            else:
+                if verbose:
+                    print("Writing merged COLVAR...", end="\r", flush=True)
+                _write_colvar(Path(output_path), text_result.header_lines, text_result.lines)
+                if verbose:
+                    print(f"Wrote merged COLVAR to {output_path}          ")
         return MergeResult(
             dataframe=pd.DataFrame(columns=text_result.fields),
             fields=text_result.fields,

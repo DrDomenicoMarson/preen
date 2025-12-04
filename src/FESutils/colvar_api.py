@@ -6,7 +6,7 @@ from .constants import KB_KJ_MOL, ERROR_PREFIX, energy_conversion_factor
 from .colvar_io import load_colvar_data
 from .fes_config import FESConfig
 from .grid import build_grid
-from .fes_state import create_grid_runtime_state, create_sample_state, initialize_block_state
+from .fes_state import create_grid_runtime_state, create_sample_state, initialize_block_state, symmetrize_grid_state, symmetrize_array
 from .kernel_eval import KernelEvaluator, KernelParams
 from .fes_output import OutputOptions, SampleStats, write_standard_output, write_block_output
 from .fes_plot import PlotManager
@@ -41,12 +41,29 @@ def calculate_fes(config: FESConfig, merge_result=None):
     len_tot = samples.len_tot
     name_cv_x = samples.name_cv_x
     name_cv_y = samples.name_cv_y if samples.name_cv_y is not None else ""
-    cv_x = samples.cv_x
-    cv_y = samples.cv_y
     bias = samples.bias
     dim2 = samples.dim2
     sigma_x = config.sigma[0]
     sigma_y = config.sigma[1] if dim2 else None
+
+    cv_x = samples.cv_x
+    cv_y = samples.cv_y
+
+    # Symmetrization logic
+    if config.symmetrize_cvs:
+        if name_cv_x in config.symmetrize_cvs:
+            print(f"   symmetrizing {name_cv_x} (taking absolute value)")
+            cv_x = np.abs(cv_x)
+            samples.cv_x = cv_x
+        
+        if dim2 and name_cv_y in config.symmetrize_cvs:
+            print(f"   symmetrizing {name_cv_y} (taking absolute value)")
+            cv_y = np.abs(cv_y)
+            samples.cv_y = cv_y
+            
+        for name in config.symmetrize_cvs:
+            if name != name_cv_x and (not dim2 or name != name_cv_y):
+                print(f" +++ WARNING: CV '{name}' specified in symmetrize_cvs but not found in data +++")
     kbt = config.kbt
     fmt = config.fmt
     calc_der = config.calc_der
@@ -200,6 +217,7 @@ def calculate_fes(config: FESConfig, merge_result=None):
         print(f" first {s} samples discarded to fit with given stride")
     it = 1
     last_stats: SampleStats | None = None
+    output_grid_state = grid_state
     for n in range(s + stride, len_tot + 1, stride):
         chunk_start = s
         chunk_end = n
@@ -213,15 +231,27 @@ def calculate_fes(config: FESConfig, merge_result=None):
         if block_av or not mintozero:
             bias_norm_shift = np.logaddexp.reduce(bias[s:n])
             fes += kbt * bias_norm_shift
+            
+        output_grid_state = grid_state
+        if config.symmetrize_cvs:
+             output_grid_state = symmetrize_grid_state(grid_state, config.symmetrize_cvs)
+
         if config.plot:
             if chunk_kind is None:
-                plot_manager.record_standard_surface(fes * output_conv)
+                plot_fes = fes
+                if config.symmetrize_cvs:
+                    plot_fes = output_grid_state.fes
+                plot_manager.record_standard_surface(plot_fes * output_conv)
             else:
                 if chunk_kind == "block":
                     label = f"block{it} ({chunk_start}-{chunk_end-1})"
                 else:
                     label = f"{chunk_start}-{chunk_end-1} (cumulative)"
-                plot_manager.add_stride_surface(fes * output_conv, label)
+                
+                plot_fes = fes
+                if config.symmetrize_cvs:
+                    plot_fes = output_grid_state.fes
+                plot_manager.add_stride_surface(plot_fes * output_conv, label)
         if block_av:
             block_logweight[it - 1] = bias_norm_shift
             block_fes[it - 1] = fes
@@ -229,13 +259,25 @@ def calculate_fes(config: FESConfig, merge_result=None):
         target_file = outfile if chunk_kind is None else _chunk_path(it)
         stats = SampleStats(size=size, effective_size=effsize)
         last_stats = stats
+        
         write_standard_output(
-            target_file, grid_state, names, output_options, stats, mesh_tuple
+            target_file, output_grid_state, names, output_options, stats, output_grid_state.mesh
         )
         if chunk_kind is not None:
             it += 1
 
     if config.plot:
+        # Plot manager needs to know about symmetrized axes if we used them
+        if config.symmetrize_cvs:
+            # We need to re-init plot manager with new axes?
+            # Or just update them.
+            # PlotManager stores axis_x, axis_y.
+            # We can update them.
+            # output_grid_state is from the last iteration.
+            plot_manager.axis_x = output_grid_state.axis_x
+            plot_manager.axis_y = output_grid_state.axis_y
+            plot_manager.mesh = output_grid_state.mesh
+            
         if chunk_kind is None:
             standard_plot_path = (
                 os.path.join(output_dir, f"{root_name}.png")
@@ -261,7 +303,7 @@ def calculate_fes(config: FESConfig, merge_result=None):
     # Write final aggregated output in the parent directory for stride mode
     if chunk_kind == "stride" and last_stats is not None:
         write_standard_output(
-            outfile, grid_state, names, output_options, last_stats, mesh_tuple
+            outfile, output_grid_state, names, output_options, last_stats, output_grid_state.mesh
         )
 
     if block_av:
@@ -314,14 +356,58 @@ def calculate_fes(config: FESConfig, merge_result=None):
             blocks_num=blocks_num,
             blocks_effective=blocks_neff,
         )
+        
+        output_grid_state = grid_state
+        output_fes_err = fes_err
+        if config.symmetrize_cvs:
+             output_grid_state = symmetrize_grid_state(grid_state, config.symmetrize_cvs)
+             
+             # Symmetrize error
+             sym_x = grid_state.axis_x.name in config.symmetrize_cvs
+             sym_y = grid_state.axis_y is not None and grid_state.axis_y.name in config.symmetrize_cvs
+             
+             # Need to know if merged. Re-check logic or expose from helper.
+             # Helper returns state.
+             # Let's just assume we can re-derive it or use helper logic.
+             # Actually, symmetrize_grid_state uses _sym_axis which checks merge.
+             # We can't easily access that here without duplicating logic.
+             # But wait, output_grid_state.fes has the new shape.
+             # We can use that shape to guide us? No.
+             
+             # Let's just use symmetrize_array with manual check?
+             # Or better, update symmetrize_grid_state to allow passing extra arrays?
+             # Too late, I already wrote it.
+             # I'll just duplicate the merge check logic briefly here or trust it matches.
+             
+             # Check x merge
+             vx = grid_state.axis_x.values
+             vx_new = np.concatenate((-vx[::-1], vx))
+             merged_x = np.isclose(vx_new[len(vx)-1], vx_new[len(vx)])
+             
+             merged_y = False
+             orig_y_bins = 0
+             if grid_state.dim2:
+                 vy = grid_state.axis_y.values
+                 vy_new = np.concatenate((-vy[::-1], vy))
+                 merged_y = np.isclose(vy_new[len(vy)-1], vy_new[len(vy)])
+                 orig_y_bins = grid_state.axis_y.bins
+                 
+             output_fes_err = symmetrize_array(fes_err, sym_x, sym_y, merged_x, merged_y, orig_y_bins)
+
         write_block_output(
-            block_outfile, grid_state, names, output_options, stats, fes_err, mesh_tuple
+            block_outfile, output_grid_state, names, output_options, stats, output_fes_err, output_grid_state.mesh
         )
         if config.plot:
+            # Update plot manager axes again just in case
+            if config.symmetrize_cvs:
+                plot_manager.axis_x = output_grid_state.axis_x
+                plot_manager.axis_y = output_grid_state.axis_y
+                plot_manager.mesh = output_grid_state.mesh
+                
             plot_manager.save_block_plots(
                 block_err_plot,
-                fes_block * output_conv,
-                fes_err * output_conv,
+                output_grid_state.fes * output_conv,
+                output_fes_err * output_conv,
                 names,
             )
         np.copyto(grid_state.fes, original_fes)

@@ -1,0 +1,3 @@
+recursive-exclude * __pycache__ *.py[cod] *.pyo
+prune *.egg-info
+global-exclude .DS_Store .DS_store

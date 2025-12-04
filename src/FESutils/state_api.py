@@ -7,7 +7,7 @@ from .constants import ERROR_PREFIX, energy_conversion_factor
 from .colvar_io import open_text_file
 from .fes_config import FESStateConfig
 from .grid import GridAxis, GridData
-from .fes_state import create_grid_runtime_state
+from .fes_state import create_grid_runtime_state, symmetrize_grid_state
 from .kernel_eval import (
     _numba_calc_prob_1d,
     _numba_calc_der_prob_1d,
@@ -37,10 +37,15 @@ def calculate_fes_from_state(config: FESStateConfig):
         print(f"   working... state {idx}/{total_states}", end="\r")
         header, meta, header_end = _parse_state_header(data, start, config.input_file)
         meta, data_start = _parse_periodicity(data, header_end, end, header, meta)
-        kernels = _extract_kernels(data, data_start, end, meta.dim2, config.input_file)
+        kernels = _extract_kernels(data, data_start, end, meta.dim2, config.input_file, config, meta)
         grid = _build_grid_from_state(config, meta, kernels)
         grid_state, stats = _evaluate_state_fes(config, meta, kernels, grid)
-        _write_state_outputs(config, meta, grid_state, stats, grid.mesh, output_conv)
+        
+        # Symmetrize grid state if needed
+        if config.symmetrize_cvs:
+            grid_state = symmetrize_grid_state(grid_state, config.symmetrize_cvs)
+            
+        _write_state_outputs(config, meta, grid_state, stats, grid_state.mesh, output_conv)
     print("Done.")
 
 
@@ -168,13 +173,28 @@ def _parse_periodicity(
     return meta, idx
 
 
-def _extract_kernels(data: np.ndarray, start: int, end: int, dim2: bool, filename: str):
+def _extract_kernels(data: np.ndarray, start: int, end: int, dim2: bool, filename: str, config: FESStateConfig, meta: _StateMeta):
     if start == end:
         raise ValueError(f"{ERROR_PREFIX} missing data!")
     chunk = data[start:end]
     center_x = np.array(chunk[:, 1], dtype=float)
+    
+    # Symmetrization logic
+    if config.symmetrize_cvs:
+        if meta.name_cv_x in config.symmetrize_cvs:
+            print(f"   symmetrizing {meta.name_cv_x} (taking absolute value)")
+            center_x = np.abs(center_x)
+            
+        for name in config.symmetrize_cvs:
+            if name != meta.name_cv_x and (not dim2 or name != meta.name_cv_y):
+                print(f" +++ WARNING: CV '{name}' specified in symmetrize_cvs but not found in state file +++")
+
     if dim2:
         center_y = np.array(chunk[:, 2], dtype=float)
+        if config.symmetrize_cvs and meta.name_cv_y in config.symmetrize_cvs:
+            print(f"   symmetrizing {meta.name_cv_y} (taking absolute value)")
+            center_y = np.abs(center_y)
+            
         sigma_x = np.array(chunk[:, 3], dtype=float)
         sigma_y = np.array(chunk[:, 4], dtype=float)
         height = np.array(chunk[:, 5], dtype=float)
@@ -329,6 +349,7 @@ def _evaluate_state_fes(config: FESStateConfig, meta: _StateMeta, kernels, grid:
                 center_y,
                 sigma_x,
                 sigma_y,
+                height,
                 meta.period_x,
                 meta.period_y,
                 meta.val_at_cutoff,
