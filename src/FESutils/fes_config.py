@@ -1,6 +1,7 @@
 import math
 import os
 from dataclasses import dataclass
+from collections.abc import Sequence
 from FESutils.constants import KB_KJ_MOL, normalize_energy_unit
 
 
@@ -23,7 +24,7 @@ class BaseFESConfig:
     backup: bool = False
     input_energy_unit: str = "kJ/mol"
     output_energy_unit: str = "kJ/mol"
-    symmetrize_cvs: list[str] | None = None
+    symmetrize_cvs: Sequence[str] | None = None
     num_threads: int | None = None
 
     def __post_init__(self):
