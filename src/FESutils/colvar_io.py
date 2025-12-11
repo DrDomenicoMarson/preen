@@ -83,6 +83,11 @@ def load_colvar_data(config: FESConfig, merge_result=None) -> ColvarData:
     else:
         if not isinstance(merge_result, MergeResult):
             raise TypeError("merge_result must be a MergeResult or None")
+        if merge_result.dataframe.empty and merge_result.row_count > 0:
+            raise ValueError(
+                f"{ERROR_PREFIX} merge_result has row_count={merge_result.row_count} but empty dataframe. "
+                "Did you set build_dataframe=True in merge_colvar_files?"
+            )
         stripped_fields = list(merge_result.fields)
         cv_infos = _resolve_cv_infos(stripped_fields, config.cv_spec)
         bias_info = _resolve_bias_info(stripped_fields, config.bias_spec)
